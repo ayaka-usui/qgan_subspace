@@ -19,14 +19,14 @@ class Config:
     GEN_STEPS = 1
     DISC_STEPS = 1
     LEARNING_RATE = 0.01
-    INIT_MODE = "state"  # "state" or "choi"
-    INIT_STATE = "zero"  # "zero", "random"
-    ANCILLA_MODE = "none"  # "none", "pass", "project", "trace_out"
+    INIT_MODE = "state"
+    INIT_STATE = "zero"
+    ANCILLA_MODE = "none"
     COST_FN = "wasserstein"
     TARGET_HAMILTONIAN = "cluster"
     CUSTOM_TERMS = {"ZZ": 0.5, "ZZZ": 0.3}
     GEN_ANSATZ = "zz_xz"
-    DISC_ANSATZ = "hardware_efficient"
+    DISC_ANSATZ = "hardware_eff"
     SAVE_PATH = f"generated_data/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     PLOT_INTERVAL = 5
 
@@ -36,18 +36,27 @@ class Config:
 # ========================
 def get_target_hamiltonian(n_qubits):
     if Config.TARGET_HAMILTONIAN == "cluster":
-        coeffs = []
-        obs = []
-        for i in range(n_qubits - 3):
-            coeffs.append(1.0)
-            obs.append(qml.PauliZ(i) @ qml.PauliZ(i + 1) @ qml.PauliZ(i + 2) @ qml.PauliZ(i + 3))
-        return qml.Hamiltonian(coeffs, obs)
+        return cluster_hamiltonian(n_qubits)
+    elif Config.TARGET_HAMILTONIAN == "surface_code":
+        return surface_code_hamiltonian(n_qubits)
     elif Config.TARGET_HAMILTONIAN == "custom":
         return custom_hamiltonian(n_qubits, Config.CUSTOM_TERMS)
-    else:  # Rotated Surface Code (simplified)
-        coeffs = [1.0] * (n_qubits // 2)
-        obs = [qml.PauliZ(i) @ qml.PauliZ(i + 1) for i in range(0, n_qubits, 2)]
-        return qml.Hamiltonian(coeffs, obs)
+    else:
+        raise ValueError(f"Unknown Hamiltonian: {Config.TARGET_HAMILTONIAN}")
+
+
+def cluster_hamiltonian(n_qubits):
+    if n_qubits < 4:
+        raise ValueError("Cluster Hamiltonian requires at least 4 qubits")
+    coeffs = [1.0] * (n_qubits - 3)
+    obs = [qml.PauliZ(i) @ qml.PauliZ(i + 1) @ qml.PauliZ(i + 2) @ qml.PauliZ(i + 3) for i in range(n_qubits - 3)]
+    return qml.Hamiltonian(coeffs, obs)
+
+
+def surface_code_hamiltonian(n_qubits):
+    coeffs = [1.0] * (n_qubits // 2)
+    obs = [qml.PauliZ(i) @ qml.PauliZ(i + 1) for i in range(0, n_qubits, 2)]
+    return qml.Hamiltonian(coeffs, obs)
 
 
 def custom_hamiltonian(n_qubits, terms):
@@ -64,55 +73,107 @@ def custom_hamiltonian(n_qubits, terms):
 # ========================
 # Ansatz Definitions
 # ========================
-def gen_ansatz(params, wires):
+GEN_ANSATZES = {
+    "zz_xz": lambda params, wires: zz_xz_ansatz(params, wires),
+    "zz_xx_yy_z": lambda params, wires: zz_xx_yy_z_ansatz(params, wires),
+    "hardware_eff": lambda params, wires: hardware_efficient_ansatz(params, wires),
+}
+
+DISC_ANSATZES = {
+    "hardware_eff": lambda params, wires: hardware_efficient_ansatz(params, wires),
+    "basic_entangled": lambda params, wires: basic_entangled_ansatz(params, wires),
+}
+
+
+def zz_xz_ansatz(params, wires):
     n_layers = params.shape[0]
     for layer in range(n_layers):
-        # Single-qubit rotations
         for i in wires:
             qml.RX(params[layer, i, 0], wires=i)
             qml.RZ(params[layer, i, 1], wires=i)
-        # Entangling layers
         for i in range(len(wires) - 1):
             qml.IsingZZ(params[layer, i, 2], wires=[wires[i], wires[i + 1]])
 
 
-def disc_ansatz(params, wires):
+def zz_xx_yy_z_ansatz(params, wires):
     n_layers = params.shape[0]
     for layer in range(n_layers):
-        # Single-qubit rotations
+        for i in wires:
+            qml.RX(params[layer, i, 0], wires=i)
+            qml.RY(params[layer, i, 1], wires=i)
+        for i in range(len(wires) - 1):
+            qml.IsingZZ(params[layer, i, 2], wires=[wires[i], wires[i + 1]])
+            qml.IsingXX(params[layer, i, 3], wires=[wires[i], wires[i + 1]])
+            qml.IsingYY(params[layer, i, 4], wires=[wires[i], wires[i + 1]])
+
+
+def hardware_efficient_ansatz(params, wires):
+    n_layers = params.shape[0]
+    for layer in range(n_layers):
         for i in wires:
             qml.Rot(*params[layer, i, :3], wires=i)
-        # Entangling layers
         for i in range(len(wires) - 1):
             qml.CNOT(wires=[wires[i], wires[i + 1]])
+
+
+def basic_entangled_ansatz(params, wires):
+    n_layers = params.shape[0]
+    for layer in range(n_layers):
+        for i in wires:
+            qml.RY(params[layer, i, 0], wires=i)
+        for i in range(len(wires) - 1):
+            qml.CZ(wires=[wires[i], wires[i + 1]])
+
+
+# ========================
+# Cost Functions
+# ========================
+def get_cost_function():
+    return {
+        "wasserstein": wasserstein_cost,
+        "fidelity": fidelity_cost,
+        "trace_dist": trace_distance_cost,
+        "trace_dist_sq": trace_distance_squared_cost,
+    }[Config.COST_FN]
+
+
+def wasserstein_cost(real_probs, fake_probs):
+    return qml.math.sum(real_probs - fake_probs)
+
+
+def fidelity_cost(real_state, fake_state):
+    return 1 - qml.math.fidelity(real_state, fake_state)
+
+
+def trace_distance_cost(rho, sigma):
+    diff = rho - sigma
+    sqrt = qml.math.sqrt(qml.math.dot(diff, qml.math.conj(diff).T))
+    return 0.5 * qml.math.trace(sqrt)
+
+
+def trace_distance_squared_cost(rho, sigma):
+    diff = rho - sigma
+    return 0.5 * qml.math.trace(qml.math.dot(diff, diff))
 
 
 # ========================
 # Quantum Circuits
 # ========================
-def prepare_initial_state(wires):
-    if Config.INIT_MODE == "choi":
-        qml.Hadamard(wires=wires[0])
-        for i in range(1, len(wires) // 2):
-            qml.CNOT(wires=[wires[0], wires[i]])
-    elif Config.INIT_STATE == "random":
-        state = np.random.rand(2 ** len(wires)) + 1j * np.random.rand(2 ** len(wires))
-        state /= np.linalg.norm(state)
-        qml.StatePrep(state, wires=wires)
-    else:
-        qml.BasisState(np.zeros(len(wires)), wires=wires)
-
-
 def create_circuits():
     n_qubits = Config.QUBITS
     ancilla = 1 if Config.ANCILLA_MODE != "none" else 0
     total_wires = n_qubits + ancilla
-    dev = qml.device("default.qubit", wires=total_wires)
+
+    # Choose device based on state type
+    if Config.INIT_MODE == "choi" or Config.ANCILLA_MODE != "none":
+        dev = qml.device("default.mixed", wires=total_wires)
+    else:
+        dev = qml.device("default.qubit", wires=total_wires)
 
     @qml.qnode(dev)
     def generator(params):
         prepare_initial_state(range(n_qubits))
-        gen_ansatz(params, range(n_qubits))
+        GEN_ANSATZES[Config.GEN_ANSATZ](params, range(n_qubits))
 
         if Config.ANCILLA_MODE == "pass":
             qml.CNOT(wires=[n_qubits - 1, n_qubits])
@@ -124,31 +185,29 @@ def create_circuits():
 
     @qml.qnode(dev)
     def discriminator(params, state):
-        try:
+        if dev.name == "default.mixed":
+            qml.QubitDensityMatrix(state, wires=range(total_wires))
+        else:
             qml.StatePrep(state, wires=range(total_wires))
-        except AttributeError:
-            qml.QubitStateVector(state, wires=range(total_wires))
 
-        disc_ansatz(params, range(total_wires))
+        DISC_ANSATZES[Config.DISC_ANSATZ](params, range(total_wires))
         return qml.probs(wires=range(total_wires))
 
     return generator, discriminator
 
 
-# ========================
-# Cost Functions
-# ========================
-def wasserstein_cost(real_probs, fake_probs):
-    return np.sum(real_probs - fake_probs)
-
-
-def state_fidelity(real_state, fake_state):
-    return np.abs(np.vdot(real_state, fake_state)) ** 2
-
-
-def trace_distance(rho, sigma):
-    diff = rho - sigma
-    return 0.5 * np.trace(np.sqrt(diff @ diff.conj().T))
+def prepare_initial_state(wires):
+    if Config.INIT_MODE == "choi":
+        # Create Bell state |Φ+⟩⟨Φ+| for Choi representation
+        state = np.zeros((4, 4))
+        state[0, 0] = state[0, 3] = state[3, 0] = state[3, 3] = 0.5
+        qml.QubitDensityMatrix(state, wires=wires)
+    elif Config.INIT_STATE == "random":
+        vec = np.random.rand(2 ** len(wires)) + 1j * np.random.rand(2 ** len(wires))
+        vec /= np.linalg.norm(vec)
+        qml.StatePrep(vec, wires=wires)
+    else:
+        qml.BasisState(np.zeros(len(wires)), wires=wires)
 
 
 # ========================
@@ -161,7 +220,10 @@ def train():
     gen, disc = create_circuits()
     target_H = get_target_hamiltonian(Config.QUBITS)
 
-    # Target state preparation with version handling
+    # Determine if using density matrices
+    using_density_matrices = isinstance(gen.device, qml.devices.DefaultMixed)
+
+    # Target state preparation
     @qml.qnode(qml.device("default.qubit", wires=Config.QUBITS))
     def target_circuit():
         qml.BasisState(np.zeros(Config.QUBITS), wires=range(Config.QUBITS))
@@ -170,22 +232,25 @@ def train():
 
     target_state = target_circuit()
 
-    # Handle ancilla in target state
+    # Convert to density matrix if needed
+    if using_density_matrices:
+        target_state = np.outer(target_state, target_state.conj())
+
+    # Handle ancilla
     if Config.ANCILLA_MODE != "none":
-        target_state = np.kron(target_state, np.array([1, 0]))  # Add ancilla |0>
+        ancilla_state = np.array([1, 0]) if not using_density_matrices else np.outer([1, 0], [1, 0])
+        target_state = np.kron(target_state, ancilla_state)
 
     # Parameter initialization
-    gen_shape = (Config.LAYERS, Config.QUBITS, 3)
-    disc_shape = (Config.LAYERS, Config.QUBITS + (1 if Config.ANCILLA_MODE != "none" else 0), 3)
-    gen_params = np.random.uniform(0, 2 * np.pi, gen_shape)
-    disc_params = np.random.uniform(0, 2 * np.pi, disc_shape)
+    gen_params = init_parameters(Config.GEN_ANSATZ, is_generator=True)
+    disc_params = init_parameters(Config.DISC_ANSATZ, is_generator=False)
 
     # Optimizers
     gen_opt = qml.AdamOptimizer(Config.LEARNING_RATE)
     disc_opt = qml.AdamOptimizer(Config.LEARNING_RATE)
 
     # Training history
-    history = {"gen_cost": [], "disc_cost": [], "fidelity": [], "trace_dist": []}
+    history = {"gen_cost": [], "disc_cost": [], "fidelity": [], Config.COST_FN: []}
 
     # Main training loop
     for epoch in tqdm(range(Config.EPOCHS)):
@@ -202,8 +267,8 @@ def train():
                     fake_probs = disc(d_params, fake_state)
                     return wasserstein_cost(real_probs, fake_probs)
 
-                disc_params = disc_opt.step(disc_cost, disc_params)
-                disc_cost_epoch.append(disc_cost(disc_params))
+                disc_params, disc_cost_val = disc_opt.step_and_cost(disc_cost, disc_params)
+                disc_cost_epoch.append(disc_cost_val)
 
             # Generator training
             for _ in range(Config.GEN_STEPS):
@@ -214,15 +279,22 @@ def train():
                     real_probs = disc(disc_params, target_state)
                     return -wasserstein_cost(real_probs, fake_probs)
 
-                gen_params = gen_opt.step(gen_cost, gen_params)
-                gen_cost_epoch.append(gen_cost(gen_params))
+                gen_params, gen_cost_val = gen_opt.step_and_cost(gen_cost, gen_params)
+                gen_cost_epoch.append(gen_cost_val)
 
             # Calculate metrics
             fake_state = gen(gen_params)
-            history["fidelity"].append(state_fidelity(target_state, fake_state))
-            rho = np.outer(target_state, target_state.conj())
-            sigma = np.outer(fake_state, fake_state.conj())
-            history["trace_dist"].append(trace_distance(rho, sigma))
+
+            # Convert states to compatible format
+            if using_density_matrices:
+                rho = target_state
+                sigma = fake_state
+            else:
+                rho = np.outer(target_state, target_state.conj())
+                sigma = np.outer(fake_state, fake_state.conj())
+
+            history["fidelity"].append(qml.math.fidelity(rho, sigma))
+            history[Config.COST_FN].append(get_cost_function()(rho, sigma))
 
         # Save history
         history["gen_cost"].extend(gen_cost_epoch)
@@ -235,30 +307,49 @@ def train():
 
     # Save final results
     with open(f"{Config.SAVE_PATH}/config.json", "w") as f:
-        json.dump(vars(Config), f, indent=2)
+        config_dict = {
+            k: v
+            for k, v in vars(Config).items()
+            if not k.startswith("__") and isinstance(v, (int, float, str, list, dict, bool))
+        }
+        json.dump(config_dict, f, indent=2)
 
     return gen_params, disc_params, history
 
 
-# ========================
-# Visualization
-# ========================
+def init_parameters(ansatz_type, is_generator=True):
+    param_config = {
+        "zz_xz": {"gen": (3, 3), "disc": (3, 3)},
+        "zz_xx_yy_z": {"gen": (3, 5), "disc": (3, 3)},
+        "hardware_eff": {"gen": (3, 3), "disc": (3, 3)},
+        "basic_entangled": {"gen": (1, 1), "disc": (1, 1)},
+    }
+
+    role = "gen" if is_generator else "disc"
+    layers, params_per_gate = param_config[ansatz_type][role]
+
+    n_qubits = Config.QUBITS + (1 if Config.ANCILLA_MODE != "none" and not is_generator else 0)
+
+    return np.random.uniform(0, 2 * np.pi, (Config.LAYERS, n_qubits, params_per_gate))
+
+
 def plot_training(history, epoch):
     plt.figure(figsize=(12, 6))
 
     plt.subplot(121)
     plt.plot(history["gen_cost"], label="Generator Cost")
     plt.plot(history["disc_cost"], label="Discriminator Cost")
-    plt.plot(np.array(history["gen_cost"]) - np.array(history["disc_cost"]), label="Gen-Disc Difference")
     plt.xlabel("Training Step")
-    plt.ylabel("Cost")
+    plt.ylabel("Cost Value")
+    plt.title(f"{Config.COST_FN} Cost Evolution")
     plt.legend()
 
     plt.subplot(122)
-    plt.plot(history["fidelity"], label="Fidelity")
-    plt.plot(history["trace_dist"], label="Trace Distance")
+    plt.plot(history["fidelity"], label="State Fidelity")
+    plt.plot(history[Config.COST_FN], label=f"{Config.COST_FN} Value")
     plt.xlabel("Training Step")
-    plt.ylabel("Metric")
+    plt.ylabel("Metric Value")
+    plt.title("Quality Metrics")
     plt.legend()
 
     plt.tight_layout()
@@ -266,19 +357,23 @@ def plot_training(history, epoch):
     plt.close()
 
 
-# ========================
-# Main Execution
-# ========================
 if __name__ == "__main__":
-    # Example configuration
-    Config.QUBITS = 4
-    Config.TARGET_HAMILTONIAN = "cluster"
-    Config.COST_FN = "wasserstein"
-    Config.ANCILLA_MODE = "none"
+    # Test configurations
+    configs = [
+        # {"QUBITS": 4, "COST_FN": "wasserstein", "GEN_ANSATZ": "zz_xz"},
+        # {"QUBITS": 4, "COST_FN": "fidelity", "GEN_ANSATZ": "hardware_eff"},
+        {"QUBITS": 6, "COST_FN": "trace_dist", "GEN_ANSATZ": "zz_xx_yy_z"},
+    ]
 
-    # Run training
-    gen_params, disc_params, history = train()
+    for cfg in configs:
+        Config.QUBITS = cfg["QUBITS"]
+        Config.COST_FN = cfg["COST_FN"]
+        Config.GEN_ANSATZ = cfg["GEN_ANSATZ"]
+        Config.SAVE_PATH = f"generated_data/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        try:
+            gen_params, disc_params, history = train()
+            print(f"Success: {cfg}")
+        except Exception as e:
+            print(f"Failed {cfg}: {str(e)}")
 
-    # Final plot
-    plot_training(history, "final")
-    print(f"Training complete! Results saved to {Config.SAVE_PATH}")
+    print("Testing complete!")
