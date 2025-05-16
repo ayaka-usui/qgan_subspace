@@ -461,4 +461,5 @@ if __name__ == "__main__":
     # BASIC EXECUTION
     #################
     else:
+        print("\nTesting passed configuration:")
         train()
