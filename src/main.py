@@ -13,10 +13,10 @@ from tqdm import tqdm
 # Configuration
 # ========================
 class Config:
-    QUBITS = 4
+    QUBITS = 2
     LAYERS = 10
     EPOCHS = 10
-    STEPS_PER_EPOCH = 10
+    STEPS_PER_EPOCH = 1
     GEN_STEPS = 1
     DISC_STEPS = 5
     LEARNING_RATE = 0.01

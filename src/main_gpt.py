@@ -10,11 +10,11 @@ from pennylane import numpy as pnp
 # Configuration class with all settings
 class Config:
     # Default parameters (modify as needed)
-    n_qubits = 4  # Number of main qubits (data qubits)
+    n_qubits = 2  # Number of main qubits (data qubits)
     layers = 10  # Number of layers in each ansatz circuit
     epochs = 10  # Training epochs
-    gen_steps = 10  # Generator update steps per epoch
-    disc_steps = 50  # Discriminator update steps per epoch
+    gen_steps = 1  # Generator update steps per epoch
+    disc_steps = 5  # Discriminator update steps per epoch
     init_mode = "choi"  # "state" or "choi"
     ancilla_mode = "none"  # "none", "pass", "project", "tracing_out"
     cost_fn = "wasserstein"  # "fidelity", "trace", "wasserstein"
@@ -461,5 +461,5 @@ if __name__ == "__main__":
     # BASIC EXECUTION
     #################
     else:
-        print("\nTesting passed configuration:")
+        print("\n Running passed configuration:")
         train()
