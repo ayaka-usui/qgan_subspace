@@ -5,6 +5,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import pennylane as qml
 from pennylane import numpy as np
+from pennylane import numpy as pnp
 from tqdm import tqdm
 
 
@@ -13,22 +14,22 @@ from tqdm import tqdm
 # ========================
 class Config:
     QUBITS = 4
-    LAYERS = 3
-    EPOCHS = 50
-    STEPS_PER_EPOCH = 20
+    LAYERS = 10
+    EPOCHS = 10
+    STEPS_PER_EPOCH = 10
     GEN_STEPS = 1
-    DISC_STEPS = 1
+    DISC_STEPS = 5
     LEARNING_RATE = 0.01
-    INIT_MODE = "state"
-    INIT_STATE = "zero"
-    ANCILLA_MODE = "none"
-    COST_FN = "wasserstein"
-    TARGET_HAMILTONIAN = "cluster"
-    CUSTOM_TERMS = {"ZZ": 0.5, "ZZZ": 0.3}
-    GEN_ANSATZ = "zz_xz"
-    DISC_ANSATZ = "hardware_eff"
-    SAVE_PATH = f"generated_data/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    PLOT_INTERVAL = 5
+    INIT_MODE = "choi"  # choi, state
+    INIT_STATE = "zero"  # zero, random
+    ANCILLA_MODE = "none"  # none, pass, project
+    COST_FN = "wasserstein"  # wasserstein, fidelity, trace_dist, trace_dist_sq
+    TARGET_HAMILTONIAN = "cluster"  # cluster, surface_code, custom
+    # CUSTOM_TERMS = {"ZZ": 0.5, "ZZZ": 0.3}
+    GEN_ANSATZ = "zz_xx_yy_z"  # zz_xz, zz_xx_yy_z, hardware_eff, basic_entangled
+    DISC_ANSATZ = "zz_xx_yy_z"  # zz_xz, zz_xx_yy_z, hardware_eff, basic_entangled
+    SAVE_PATH = f"generated_data/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    PLOT_INTERVAL = 1
 
 
 # ========================
@@ -49,7 +50,7 @@ def cluster_hamiltonian(n_qubits):
     if n_qubits < 4:
         raise ValueError("Cluster Hamiltonian requires at least 4 qubits")
     coeffs = [1.0] * (n_qubits - 3)
-    obs = [qml.PauliZ(i) @ qml.PauliZ(i + 1) @ qml.PauliZ(i + 2) @ qml.PauliZ(i + 3) for i in range(n_qubits - 3)]
+    obs = [qml.PauliX(i) @ qml.PauliZ(i + 1) @ qml.PauliZ(i + 2) @ qml.PauliZ(i + 3) for i in range(n_qubits - 3)]
     return qml.Hamiltonian(coeffs, obs)
 
 
@@ -65,21 +66,21 @@ def custom_hamiltonian(n_qubits, terms):
         term_length = len(term)
         for i in range(n_qubits - term_length + 1):
             paulis = [getattr(qml, f"Pauli{term[j]}")(i + j) for j in range(term_length)]
+            # Compute the tensor product using @
+            product = paulis[0]
+            for p in paulis[1:]:
+                product @= p
             coeffs.append(weight)
-            obs.append(qml.operation.Tensor(*paulis))
+            obs.append(product)
     return qml.Hamiltonian(coeffs, obs)
 
 
 # ========================
 # Ansatz Definitions
 # ========================
-GEN_ANSATZES = {
+ANSATZES = {
     "zz_xz": lambda params, wires: zz_xz_ansatz(params, wires),
     "zz_xx_yy_z": lambda params, wires: zz_xx_yy_z_ansatz(params, wires),
-    "hardware_eff": lambda params, wires: hardware_efficient_ansatz(params, wires),
-}
-
-DISC_ANSATZES = {
     "hardware_eff": lambda params, wires: hardware_efficient_ansatz(params, wires),
     "basic_entangled": lambda params, wires: basic_entangled_ansatz(params, wires),
 }
@@ -173,7 +174,7 @@ def create_circuits():
     @qml.qnode(dev)
     def generator(params):
         prepare_initial_state(range(n_qubits))
-        GEN_ANSATZES[Config.GEN_ANSATZ](params, range(n_qubits))
+        ANSATZES[Config.GEN_ANSATZ](params, range(n_qubits))
 
         if Config.ANCILLA_MODE == "pass":
             qml.CNOT(wires=[n_qubits - 1, n_qubits])
@@ -190,7 +191,7 @@ def create_circuits():
         else:
             qml.StatePrep(state, wires=range(total_wires))
 
-        DISC_ANSATZES[Config.DISC_ANSATZ](params, range(total_wires))
+        ANSATZES[Config.DISC_ANSATZ](params, range(total_wires))
         return qml.probs(wires=range(total_wires))
 
     return generator, discriminator
@@ -198,9 +199,12 @@ def create_circuits():
 
 def prepare_initial_state(wires):
     if Config.INIT_MODE == "choi":
-        # Create Bell state |Φ+⟩⟨Φ+| for Choi representation
-        state = np.zeros((4, 4))
-        state[0, 0] = state[0, 3] = state[3, 0] = state[3, 3] = 0.5
+        # Create a maximally entangled state across all qubits
+        n_qubits = len(wires)
+        state = np.zeros((2**n_qubits, 2**n_qubits))
+        state[0, 0] = 1.0  # |0..0><0..0|
+        state[-1, -1] = 1.0  # |1..1><1..1|
+        state /= 2.0  # Normalize to ensure trace 1
         qml.QubitDensityMatrix(state, wires=wires)
     elif Config.INIT_STATE == "random":
         vec = np.random.rand(2 ** len(wires)) + 1j * np.random.rand(2 ** len(wires))
@@ -320,17 +324,19 @@ def train():
 def init_parameters(ansatz_type, is_generator=True):
     param_config = {
         "zz_xz": {"gen": (3, 3), "disc": (3, 3)},
-        "zz_xx_yy_z": {"gen": (3, 5), "disc": (3, 3)},
+        "zz_xx_yy_z": {"gen": (3, 5), "disc": (3, 5)},  # 5 params per gate for generator
         "hardware_eff": {"gen": (3, 3), "disc": (3, 3)},
         "basic_entangled": {"gen": (1, 1), "disc": (1, 1)},
     }
-
     role = "gen" if is_generator else "disc"
     layers, params_per_gate = param_config[ansatz_type][role]
 
-    n_qubits = Config.QUBITS + (1 if Config.ANCILLA_MODE != "none" and not is_generator else 0)
+    # Calculate qubit count (including ancilla if needed)
+    n_qubits = Config.QUBITS
+    if not is_generator and Config.ANCILLA_MODE != "none":
+        n_qubits += 1  # Add ancilla for discriminator
 
-    return np.random.uniform(0, 2 * np.pi, (Config.LAYERS, n_qubits, params_per_gate))
+    return pnp.array(np.random.uniform(0, 2 * np.pi, (Config.LAYERS, n_qubits, params_per_gate)), requires_grad=True)
 
 
 def plot_training(history, epoch):
@@ -359,21 +365,4 @@ def plot_training(history, epoch):
 
 if __name__ == "__main__":
     # Test configurations
-    configs = [
-        # {"QUBITS": 4, "COST_FN": "wasserstein", "GEN_ANSATZ": "zz_xz"},
-        # {"QUBITS": 4, "COST_FN": "fidelity", "GEN_ANSATZ": "hardware_eff"},
-        {"QUBITS": 6, "COST_FN": "trace_dist", "GEN_ANSATZ": "zz_xx_yy_z"},
-    ]
-
-    for cfg in configs:
-        Config.QUBITS = cfg["QUBITS"]
-        Config.COST_FN = cfg["COST_FN"]
-        Config.GEN_ANSATZ = cfg["GEN_ANSATZ"]
-        Config.SAVE_PATH = f"generated_data/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-        try:
-            gen_params, disc_params, history = train()
-            print(f"Success: {cfg}")
-        except Exception as e:
-            print(f"Failed {cfg}: {str(e)}")
-
-    print("Testing complete!")
+    gen_params, disc_params, history = train()
