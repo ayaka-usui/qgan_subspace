@@ -10,12 +10,12 @@ from pennylane import numpy as pnp
 # Configuration class with all settings
 class Config:
     # Default parameters (modify as needed)
-    n_qubits = 2  # Number of main qubits (data qubits)
-    layers = 10  # Number of layers in each ansatz circuit
+    n_qubits = 8  # Number of main qubits (data qubits)
+    layers = 5  # Number of layers in each ansatz circuit
     epochs = 10  # Training epochs
-    gen_steps = 1  # Generator update steps per epoch
-    disc_steps = 5  # Discriminator update steps per epoch
-    init_mode = "choi"  # "state" or "choi"
+    gen_steps = 50  # Generator update steps per epoch
+    disc_steps = 200  # Discriminator update steps per epoch
+    init_mode = "state"  # "state" or "choi"
     ancilla_mode = "none"  # "none", "pass", "project", "tracing_out"
     cost_fn = "wasserstein"  # "fidelity", "trace", "wasserstein"
     target_type = "clusterH"  # "clusterH", "rotated_surface_code", or "custom"

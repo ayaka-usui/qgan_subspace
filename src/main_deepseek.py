@@ -14,11 +14,11 @@ from tqdm import tqdm
 # ========================
 class Config:
     QUBITS = 2
-    LAYERS = 10
+    LAYERS = 5
     EPOCHS = 10
     STEPS_PER_EPOCH = 1
-    GEN_STEPS = 1
-    DISC_STEPS = 5
+    GEN_STEPS = 50
+    DISC_STEPS = 200
     LEARNING_RATE = 0.01
     INIT_MODE = "choi"  # choi, state
     INIT_STATE = "zero"  # zero, random
