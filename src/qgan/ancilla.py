@@ -39,12 +39,19 @@ def project_ancilla_zero(state: np.ndarray) -> tuple[np.ndarray, float]:
     if norm == 0:  # Return the system part (without ancilla) as zeros
         return np.zeros((2 ** (CFG.system_size * 2), 1)), 0.0
 
-    # Renormalize
-    normalized_projected = projected / norm
-    return normalized_projected.reshape(-1, 1), norm**2
+    # Renormalize if needed:
+    if CFG.ancilla_project_norm:
+        projected = projected / norm
+    elif CFG.ancilla_project_norm in ["pass", "penalize"]:
+        pass
+    else:
+        raise ValueError(f"Unknown ancilla_project_norm: {CFG.ancilla_project_norm}")
+
+    return projected.reshape(-1, 1), norm**2
 
 
 # TODO: Think better what to do with this function... (how to use it)
+# Right now, maybe its a cool way to codify if passing the "norm" or not.
 def trace_out_ancilla(state: np.ndarray) -> np.ndarray:
     """Trace out the last qubit and return a sampled pure state from the reduced density matrix.
 
@@ -80,19 +87,20 @@ def get_final_fake_state_for_discriminator(total_output_state: np.ndarray) -> np
     Returns:
         np.ndarray: The final state to be passed to the discriminator.
     """
+    norm = None
     total_final_state = total_output_state
     if CFG.extra_ancilla:
         if CFG.ancilla_mode == "pass":
             # Pass ancilla to discriminator (current behavior)
             return total_final_state
         if CFG.ancilla_mode == "project":
-            projected, prob = project_ancilla_zero(total_final_state)
+            projected, norm = project_ancilla_zero(total_final_state)
             return np.matrix(projected)
         if CFG.ancilla_mode == "trace":
             traced = np.matrix(trace_out_ancilla(total_final_state))
             return traced
         raise ValueError(f"Unknown ancilla_mode: {CFG.ancilla_mode}")
-    return total_final_state
+    return total_final_state, norm
 
 
 def get_final_real_state_for_discriminator(total_output_state: np.ndarray) -> np.ndarray:

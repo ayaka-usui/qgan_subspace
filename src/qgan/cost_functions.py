@@ -21,7 +21,7 @@ from qgan.ancilla import get_final_fake_state_for_discriminator, get_final_real_
 np.random.seed()
 
 
-def get_final_comp_states_for_dis(gen, total_input_state: np.ndarray, total_real_state: np.ndarray) -> np.ndarray:
+def get_final_comp_states_for_dis(gen, total_input_state: np.ndarray, total_real_state: np.ndarray) -> tuple:
     """Get the final fake state for the discriminator
 
     Args:
@@ -30,15 +30,15 @@ def get_final_comp_states_for_dis(gen, total_input_state: np.ndarray, total_real
         total_real_state (np.ndarray): the real state, which is the target state.
 
     Returns:
-        np.ndarray: the final fake state for the discriminator.
+        tuple[np.ndarray]: the final fake and real states for the discriminator, and the fake norm
     """
     Untouched_x_G: np.ndarray = gen.get_Untouched_qubits_and_Gen()
 
     total_output_state: np.ndarray = np.matmul(Untouched_x_G, total_input_state)
 
-    final_fake_state: np.ndarray = get_final_fake_state_for_discriminator(total_output_state)
+    final_fake_state, fake_norm = get_final_fake_state_for_discriminator(total_output_state)
     final_real_state: np.ndarray = get_final_real_state_for_discriminator(total_real_state)
-    return final_fake_state, final_real_state
+    return final_fake_state, final_real_state, fake_norm
 
 
 def compute_cost(gen, dis, total_real_state: np.ndarray, total_input_state: np.ndarray) -> float:
@@ -53,7 +53,7 @@ def compute_cost(gen, dis, total_real_state: np.ndarray, total_input_state: np.n
     Returns:
         float: the cost function.
     """
-    final_fake_state, final_real_state = get_final_comp_states_for_dis(gen, total_input_state, total_real_state)
+    final_fake_state, final_real_state, norm = get_final_comp_states_for_dis(gen, total_input_state, total_real_state)
     A, B, psi, phi = dis.get_dis_matrices_rep()
 
     # fmt: off
@@ -76,7 +76,12 @@ def compute_cost(gen, dis, total_real_state: np.ndarray, total_input_state: np.n
     # regterm = np.asscalar(CFG.lamb / np.e * (CFG.cst1 * term1 * term2 - CFG.cst2 * term3 * term4 - CFG.cst2 * term5 * term6 + CFG.cst3 * term7 * term8))
     # fmt: on
 
-    loss = np.real(psiterm - phiterm - regterm)
+    # Penalization for ancilla qubit norm, if needed
+    penalization = 0
+    if CFG.extra_ancilla and CFG.ancilla_mode == "project" and CFG.ancilla_project_norm == "penalize":
+        penalization = CFG.ancilla_norm_penalization * norm
+
+    loss = np.real(psiterm - phiterm - regterm) + penalization
 
     return loss
 
@@ -92,7 +97,7 @@ def compute_fidelity(gen, total_real_state: np.ndarray, total_input_state: np.nd
     Returns:
         float: the fidelity between the target state and the fake state.
     """
-    final_fake_state, final_real_state = get_final_comp_states_for_dis(gen, total_input_state, total_real_state)
+    final_fake_state, final_real_state, _ = get_final_comp_states_for_dis(gen, total_input_state, total_real_state)
 
     return np.abs(np.ndarray.item(np.matmul(final_real_state.getH(), final_fake_state))) ** 2
     # return np.abs(np.asscalar(np.matmul(real_state.getH(), total_final_state))) ** 2
