@@ -28,21 +28,21 @@ class Config:
         # CODE CONFIGURATION
         ########################################################################
         self.testing: bool = False  # True for testing mode, or False for single run
-        self.load_timestamp: Optional[str] = "2025-06-06__02-05-10"
+        self.load_timestamp: Optional[str] = None #"2025-06-06__02-05-10"
 
         #######################################################################
         # TRAINING CONFIGURATION
         #######################################################################
-        self.epochs: int = 3  # Number of epochs for training (default: 10)
-        self.iterations_epoch: int = 10  # Number of iterations per epoch (default: 100)
-        self.log_every_x_iter: int = 10  # Log every x iterations (default: 10)
+        self.epochs: int = 3 # Number of epochs for training (default: 10)
+        self.iterations_epoch: int = 100  # Number of iterations per epoch (default: 100)
+        self.log_every_x_iter: int = 1  # Log every x iterations (default: 10)
         self.max_fidelity: float = 0.99  # Maximum fidelity to reach, stopping criterion (default: 0.99)
         self.ratio_step_dis_to_gen: int = 1  # Ratio of Steps to train for discriminator to generator (Dis > Gen)
 
         #######################################################################
         # QUBIT SYSTEM CONFIGURATION
         #######################################################################
-        self.system_size: int = 3  # Number of qubits to study (without choi or ancilla)
+        self.system_size: int = 2  # Number of qubits to study (without choi or ancilla)
         self.extra_ancilla: bool = True  # If to include an extra ancilla: #True # False
         self.ancilla_mode: Optional[Literal["pass", "project", "trace_out"]] = "project"  # Ancilla mode from gen to dis
         self.ancilla_topology: Optional[Literal["ansatz", "bridge", "total"]] = "ansatz"  # Connectivity for the ancilla
@@ -51,7 +51,7 @@ class Config:
         #######################################################################
         # GENERATOR CONFIGURATION
         #######################################################################
-        self.gen_layers: int = 4  # Number of layers in the Generator ansatz: #20 #15 #10 #4 #3 #2 ...
+        self.gen_layers: int = 3  # Number of layers in the Generator ansatz: #20 #15 #10 #4 #3 #2 ...
         self.gen_ansatz: Literal["XX_YY_ZZ_Z", "ZZ_X_Z"] = "XX_YY_ZZ_Z"  # Ansatz for the Generator
 
         #######################################################################
