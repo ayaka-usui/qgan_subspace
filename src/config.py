@@ -33,7 +33,7 @@ class Config:
         #   - testing: bool: Enables testing mode for running several different quick configurations.
         #
         ########################################################################
-        self.testing: bool = True
+        self.testing: bool = False
 
         #######################################################################
         # ---------------------
@@ -68,9 +68,9 @@ class Config:
         #   - ratio_step_dis_to_gen: Discriminator to generator training steps, ratio (dis > gen), (default: 1-5).
         #
         #######################################################################
-        self.epochs: int = 1
-        self.iterations_epoch: int = 20
-        self.log_every_x_iter: int = 10
+        self.epochs: int = 3
+        self.iterations_epoch: int = 100
+        self.log_every_x_iter: int = 1
         self.max_fidelity: float = 0.99
         self.ratio_step_dis_to_gen: int = 1
 
@@ -105,9 +105,9 @@ class Config:
         # |-----|-----------------|-----------------|-----------------|-----------------------|------------------------|
         #
         #######################################################################
-        self.system_size: int = 4
-        self.extra_ancilla: bool = False
-        self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "trace"
+        self.system_size: int = 3
+        self.extra_ancilla: bool = True
+        self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "project"
         self.ancilla_topology: Optional[Literal["trivial", "disconnected", "ansatz", "bridge", "total"]] = "ansatz"
 
         #######################################################################
@@ -121,7 +121,7 @@ class Config:
         #       + "ZZ_X_Z": 2 body Z, 1 body X and 1 body Z terms.
         #
         #######################################################################
-        self.gen_layers: int = 1  # 20 #15 #10 #4 #3 #2 ...
+        self.gen_layers: int = 3  # 20 #15 #10 #4 #3 #2 ...
         self.gen_ansatz: Literal["XX_YY_ZZ_Z", "ZZ_X_Z"] = "XX_YY_ZZ_Z"
 
         #######################################################################
