@@ -15,15 +15,18 @@
 
 from config import CFG
 from tools.data.data_managers import print_and_train_log
-from tools.training_init import run_single_training
+from tools.training_init import run_multiple_trainings, run_single_training
 
 
 ##############################################################
 # SINGLE RUN mode
 ##############################################################
 def main():
-    print_and_train_log("Running in SINGLE RUN mode.\n", CFG.log_path)
-    run_single_training()
+    if CFG.run_multiple_experiments:
+        run_multiple_trainings()
+    else:
+        print_and_train_log("Running in SINGLE RUN mode.\n", CFG.log_path)
+        run_single_training()
 
 
 if __name__ == "__main__":

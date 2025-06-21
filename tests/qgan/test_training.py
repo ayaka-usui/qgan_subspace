@@ -18,10 +18,6 @@ class TestTraining():
         assert t.total_target_state is not None
 
     def test_training_run(self):
-        # Change results directory to TESTING:
-        CFG.base_data_path = f"./generated_data/TESTING/{CFG.run_timestamp}"
-        CFG.set_results_paths()
-
         # Run the test configurations:
         print_and_train_log("Running in TESTING mode.\n", CFG.log_path)
         run_test_configurations()

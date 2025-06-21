@@ -26,6 +26,32 @@ class Config:
     def __init__(self):
         """Configuration for the QGAN experiment, which sets up all parameters required for training it."""
 
+        ############################################################################################
+        # ---------------------
+        # RUNS CONFIGURATION
+        # ---------------------
+        #
+        #   - run_multiple_experiments: Whether to run multiple experiments with a change in the middle.
+        #           If so you will run initial experiments, and then repetitions with changes + controls.
+        #           Each individual experiment lasting the specified number of epochs and iterations in CFG.
+        #
+        #   - N_initial_exp: Number of initial experiments to run, without change (default: 5).
+        #
+        #   - N_reps_each_init_exp: Num of reps for each initial experiment afterwards, with changes (default: 100).
+        #
+        #   - reps_new_config: New configurations to run after the initial experiments.
+        #
+        #############################################################################################
+        self.run_multiple_experiments: bool = True
+        self.N_initial_exp: int = 5
+        self.N_reps_each_init_exp: int = 10
+        self.reps_new_config: dict[str, Any] = {
+            "extra_ancilla": True,
+            "ancilla_mode": "project",
+            "ancilla_topology": "bridge",
+            "type_of_warm_star": "none",
+        }
+
         #############################################################################################
         # ---------------------
         # LOADING CONFIGURATION
@@ -41,7 +67,7 @@ class Config:
         #
         #############################################################################################
         self.load_timestamp: Optional[str] = None  # "2025-06-06__02-05-10"
-        self.type_of_warm_start: Literal["none", "all", "some"] = "all"
+        self.type_of_warm_start: Literal["none", "all", "some"] = "none"
         self.warm_start_strength: Optional[float] = 0.1
 
         #############################################################################################
@@ -56,14 +82,14 @@ class Config:
         #
         #   - max_fidelity: Stopping criterion for fidelity (default: ~0.99)
         #
-        #   - steps_gen/dis: Discriminator and Generator training steps in each iter (default: 1-5).
+        #   - steps_gen/dis: Discriminator and Generator update steps in each iter (1~5).
         #
         #############################################################################################
-        self.epochs: int = 10
-        self.iterations_epoch: int = 100
+        self.epochs: int = 3
+        self.iterations_epoch: int = 10
         self.log_every_x_iter: int = 1
         self.max_fidelity: float = 0.99
-        self.steps_gen: int = 2
+        self.steps_gen: int = 1
         self.steps_dis: int = 1
 
         #############################################################################################
@@ -134,8 +160,8 @@ class Config:
         #       + "I": Adds a 1 body identity term.
         #
         #############################################################################################
-        self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "custom_h"] = "cluster_h"
-        self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ"]  # Custom Terms: ["ZZZ", "ZZ", "Z", "I"]
+        self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "custom_h"] = "custom_h"
+        self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZ"]  # Custom Terms: ["ZZZ", "ZZ", "Z", "I"]
 
         #############################################################################################
         # -----------------------------------
