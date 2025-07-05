@@ -35,21 +35,48 @@ class Config:
         #       and not adding the changes (controls), for then comparing the effects of the changes.
         #       Each individual experiment lasting the specified number of epochs and iterations in CFG.
         #
-        #   - run_multiple_experiments: Whether to run multiple experiments with a change in the middle.
+        #   - run_multiple_experiments: Whether to run multiple experiments.
         #
-        #   - N_initial_exp: Number of initial experiments to run, without change (default: 5).
+        #   - common_initial_experiment: Whether to start from common initial exp. + change, or all from scratch.
         #
-        #   - N_reps_each_init_exp: Num of reps for each initial experiment afterwards, with changes (default: 20).
+        #     If True:
+        #       + N_initial_exp: Number of initial experiments to run, without change (default: 5).
+        #       + N_reps_each_init_exp: Num of reps for each initial experiment afterwards, with changes (default: 20).
         #
-        #   - reps_new_config: The configuration changes to run, after the initial experiments.
+        #     If False:
+        #       + N_reps_no_common_initial_exp: Number of repetitions for each new configuration (default: 100).
+        #
+        #   - reps_new_config: The configuration changes to run. If starting from common initial experiments,
+        #         then this represent the changes after the initial experiments (+ control with no changes).
+        #         If not starting from common initial experiments, then this represents the full set of experiments.
         #
         #############################################################################################
         self.run_multiple_experiments: bool = True
+        self.common_initial_experiment: bool = True
+        # If common_initial_experiment == true:
         self.N_initial_exp: int = 10
         self.N_reps_each_init_exp: int = 20
-        self.reps_new_config: dict[str, Any] = {
-            "gen_layers": 4,
-        }
+        # If common_initial_experiment == false:
+        self.N_reps_no_common_initial_exp: int = 100
+
+        self.reps_new_config: list[dict[str, Any]] = [
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "disconnected",
+            },
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "ansatz",
+            },
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "bridge",
+            },
+            # Add more configs here for comparison
+        ]
 
         #############################################################################################
         # ---------------------
@@ -91,7 +118,7 @@ class Config:
         #
         #############################################################################################
         self.epochs: int = 10
-        self.iterations_epoch: int = 150
+        self.iterations_epoch: int = 300
         self.save_fid_and_loss_every_x_iter: int = 1
         self.log_every_x_iter: int = 10  # This needs to be a multiple of save_fid_and_loss_every_x_iter
         self.max_fidelity: float = 0.99
@@ -140,9 +167,11 @@ class Config:
         self.system_size: int = 3
         self.extra_ancilla: bool = False
         self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "pass"
+        # self.ancilla_1q_gates: Optional[bool] = False
+        # TODO: Add a bool for doing or not doing ancilla 1q gates, and make it work with the rest of the code.
         self.ancilla_project_norm: Optional[Literal["re-norm", "pass"]] = "re-norm"
         self.ancilla_topology: Optional[Literal["trivial", "disconnected", "ansatz", "bridge", "total"]] = "bridge"
-        self.ancilla_connect_to: Optional[int] = 1  # None means connected to last one, otherwise to the specified.
+        self.ancilla_connect_to: Optional[int] = None  # None means connected to last one, otherwise to the specified.
         # TODO: [FUTURE] Decide what to do with trace, make all code work with density matrices, instead than sampling?
 
         #############################################################################################
@@ -156,7 +185,7 @@ class Config:
         #       + "ZZ_X_Z": 2 body Z, 1 body X and 1 body Z terms.
         #
         #############################################################################################
-        self.gen_layers: int = 3  # 2, 3, 5, 10, 20 ...
+        self.gen_layers: int = 4  # 2, 3, 5, 10, 20 ...
         self.gen_ansatz: Literal["XX_YY_ZZ_Z", "ZZ_X_Z"] = "ZZ_X_Z"
 
         #############################################################################################
