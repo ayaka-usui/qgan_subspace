@@ -16,7 +16,6 @@
 import sys
 
 import torch as np
-from scipy import linalg
 
 from config import CFG
 from tools.qobjects.qgates import I, Identity, X, Y, Z

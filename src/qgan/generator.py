@@ -26,7 +26,7 @@ from qgan.cost_functions import braket
 from qgan.discriminator import Discriminator
 from tools.data.data_managers import print_and_log
 from tools.optimizer import MomentumOptimizer
-from tools.qobjects import Identity, QuantumCircuit, QuantumGate
+from tools.qobjects import QuantumCircuit, QuantumGate
 
 np.set_default_device(CFG.device)
 
