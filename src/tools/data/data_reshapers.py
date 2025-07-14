@@ -61,7 +61,7 @@ def _unflatten(flat, prototype):
         idx = prototype.size
         res = np.array(flat)[:idx].reshape(prototype.shape)
 
-        return torch.tensor(res)
+        return torch.from_numpy(res)
 
     # if isinstance(prototype, collections.Iterable):
     if isinstance(prototype, Iterable):
