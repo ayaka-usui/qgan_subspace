@@ -23,7 +23,6 @@ np.set_default_device(CFG.device)
 I = np.eye(2, dtype=np.complex64)
 
 # Pauli matrices
-Y = np.matrix([[0, -1j], [1j, 0]])  #: Pauli-Y matrix
 X = np.tensor([[0, 1], [1, 0]], dtype=np.complex64)  #: Pauli-X matrix
 Y = np.tensor([[0, -1j], [1j, 0]], dtype=np.complex64)  #: Pauli-Y matrix
 Z = np.tensor([[1, 0], [0, -1]], dtype=np.complex64)  #: Pauli-Z matrix
@@ -57,7 +56,6 @@ def XX_Rotation(size, qubit1, qubit2, param, is_grad):
             matrix = np.kron(matrix, X)
         else:
             matrix = np.kron(matrix, I)
-        return linalg.expm(-1j * param * matrix)
     param = np.tensor(param, dtype=np.complex64)
     cpu_matrix = matrix.cpu()
     cpu_param = param.cpu()
