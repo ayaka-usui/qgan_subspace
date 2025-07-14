@@ -116,6 +116,8 @@ class Config:
         #
         #   - steps_gen/dis: Discriminator and Generator update steps in each iter (1~5).
         #
+        #   - device: Device to use for training (default: "mps", can be "cpu" or "cuda").
+        #
         #############################################################################################
         self.epochs: int = 10
         self.iterations_epoch: int = 300
@@ -124,6 +126,7 @@ class Config:
         self.max_fidelity: float = 0.99
         self.steps_gen: int = 1
         self.steps_dis: int = 1
+        self.device: Literal["mps", "cpu", "cuda"] = "mps"  # Device to use for training, default is CPU.
 
         #############################################################################################
         # ---------------------
