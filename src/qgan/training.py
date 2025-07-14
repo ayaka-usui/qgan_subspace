@@ -15,7 +15,7 @@
 
 from datetime import datetime
 
-import numpy as np
+import torch as np
 
 from config import CFG
 from qgan.ancilla import (
@@ -36,6 +36,7 @@ from tools.data.loading_helpers import load_models_if_specified
 from tools.plot_hub import plt_fidelity_vs_iter
 
 np.random.seed()
+np.set_default_device(CFG.device)
 
 
 class Training:
@@ -45,7 +46,7 @@ class Training:
         initial_state_total, initial_state_final = get_max_entangled_state_with_ancilla_if_needed(CFG.system_size)
         """Preparation of max. entgl. state with ancilla qubit if needed, to generate state."""
 
-        self.final_target_state: np.matrix = get_final_target_state(initial_state_final)
+        self.final_target_state: np.Tensor = get_final_target_state(initial_state_final)
         """Prepare the target state to compare in the Dis, with the size and Target unitary defined in config."""
 
         self.gen: Generator = Generator(initial_state_total)
@@ -109,8 +110,8 @@ class Training:
             ###########################################################
             # End of epoch, store data and plot
             ###########################################################
-            fidelities_history = np.append(fidelities_history, fidelities)
-            losses_history = np.append(losses_history, losses)
+            fidelities_history.append(fidelities)
+            losses_history.append(losses)
             plt_fidelity_vs_iter(fidelities_history, losses_history, CFG, num_epochs)
 
             #############################################################

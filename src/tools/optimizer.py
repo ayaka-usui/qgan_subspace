@@ -13,10 +13,12 @@
 # limitations under the License.
 """Optimizer file"""
 
-import numpy as np
+import torch as np
 
 from config import CFG
 from tools.data.data_reshapers import _flatten, _unflatten
+
+np.set_default_device(CFG.device)
 
 
 class MomentumOptimizer:
@@ -39,7 +41,7 @@ class MomentumOptimizer:
         self.eta: float = eta
         self.v = None
 
-    def move_in_grad(self, theta: np.ndarray, grad_list: np.ndarray, min_or_max: str) -> np.ndarray:
+    def move_in_grad(self, theta: np.Tensor, grad_list: np.Tensor, min_or_max: str) -> np.Tensor:
         grad_list = _flatten(grad_list)
         theta_tmp = _flatten(theta)
 

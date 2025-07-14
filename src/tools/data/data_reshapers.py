@@ -15,6 +15,7 @@
 from collections.abc import Iterable
 
 import numpy as np
+import torch
 
 
 def _flatten(x):
@@ -28,9 +29,11 @@ def _flatten(x):
     Yields:
         other: elements of x in depth-first order
     """
+    if isinstance(x, torch.Tensor):
+        x = x.cpu().numpy()
+
     it = x
     for x in it:
-        # if (isinstance(x, collections.Iterable) and
         if isinstance(x, Iterable) and not isinstance(x, str):
             for y in _flatten(x):
                 yield y
@@ -51,10 +54,14 @@ def _unflatten(flat, prototype):
         (other, array): first elements of flat arranged into the nested
         structure of model, unused elements of flat
     """
+    if isinstance(prototype, torch.Tensor):
+        prototype = prototype.cpu().numpy()
+
     if isinstance(prototype, np.ndarray):
         idx = prototype.size
         res = np.array(flat)[:idx].reshape(prototype.shape)
-        return res
+
+        return torch.tensor(res)
 
     # if isinstance(prototype, collections.Iterable):
     if isinstance(prototype, Iterable):

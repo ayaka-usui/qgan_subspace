@@ -15,9 +15,12 @@
 
 import os
 
-import numpy as np
+import torch as np
 
+from config import CFG
 from tools.qobjects.qgates import Identity, QuantumGate
+
+np.set_default_device(CFG.device)
 
 
 class QuantumCircuit:
@@ -42,9 +45,9 @@ class QuantumCircuit:
         for gate in self.gates:
             g = gate.matrix_representation(self.size, False)
             matrix = np.matmul(g, matrix)
-        return np.asmatrix(matrix)
+        return matrix
 
-    def get_grad_mat_rep(self, index, signal="none", type="matrix_multiplication") -> np.ndarray:
+    def get_grad_mat_rep(self, index, signal="none", type="matrix_multiplication"):
         """Matrix multipliction: explicit way to calculate the gradient using matrix multiplication.
 
         Shift_phase: generate two quantum circuit to calculate the gradient evaluating analytic gradients on quantum hardware:
@@ -58,8 +61,7 @@ class QuantumCircuit:
                 else:
                     g = gate_j.matrix_representation_shift_phase(self.size, False, signal)
                 matrix = np.matmul(g, matrix)
-            return np.asmatrix(matrix)
-
+            return matrix
         if type == "matrix_multiplication":
             matrix = Identity(self.size)
             for j, gate_j in enumerate(self.gates):
@@ -68,8 +70,7 @@ class QuantumCircuit:
                 else:
                     g = gate_j.matrix_representation(self.size, False)
                 matrix = np.matmul(g, matrix)
-            return np.asmatrix(matrix)
-
+            return matrix
         return None
 
     def get_grad_qc(self, indx, type="0"):
@@ -87,7 +88,7 @@ class QuantumCircuit:
                             tmp.angle = gate_j.angle + gate_j.s
                         elif type == "-":
                             tmp.angle = gate_j.angle - gate_j.s
-                except:
+                except Exception:
                     print("param value error")
                 qc_list.append(tmp)
             else:

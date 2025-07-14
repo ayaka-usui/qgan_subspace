@@ -15,17 +15,19 @@
 
 import sys
 
-import numpy as np
+import torch as np
 from scipy import linalg
 
 from config import CFG
 from tools.qobjects.qgates import I, Identity, X, Y, Z
 
+np.set_default_device(CFG.device)
+
 
 ##############################################################
 # MAIN FUNCTIONS FOR TARGET HAMILTONIAN
 ##############################################################
-def get_target_unitary(target_type: str, size: int) -> np.ndarray:
+def get_target_unitary(target_type: str, size: int) -> np.Tensor:
     """Get the target unitary based on the target type and size.
 
     Args:
@@ -33,7 +35,7 @@ def get_target_unitary(target_type: str, size: int) -> np.ndarray:
         size (int): Size of the system.
 
     Returns:
-        np.ndarray: The target unitary.
+        np.Tensor: The target unitary.
     """
     if target_type == "cluster_h":
         return construct_clusterH(size)
@@ -46,19 +48,18 @@ def get_target_unitary(target_type: str, size: int) -> np.ndarray:
     raise ValueError(f"Unknown target type: {target_type}. Expected 'cluster_h', 'rotated_surface_h', or 'custom_h'.")
 
 
-def get_final_target_state(final_input_state: np.ndarray) -> np.ndarray:
+def get_final_target_state(final_input_state):
     """Initialize the target state. Applying the target unitary to the maximally entangled state.
 
     And returns it ready to be used in the discriminator.
 
     Args:
-        final_input_state (np.ndarray): the input state, which is the maximally entangled state.
+        final_input_state (np.Tensor): the input state, which is the maximally entangled state.
 
     Returns:
-        np.ndarray: the target state after applying the target unitary.
+        np.Tensor: the target state after applying the target unitary.
     """
     target_unitary = get_target_unitary(CFG.target_hamiltonian, CFG.system_size)
-
     target_op = np.kron(Identity(CFG.system_size), target_unitary)
     if CFG.extra_ancilla and CFG.ancilla_mode == "pass":
         target_op = np.kron(target_op, Identity(1))
@@ -70,7 +71,7 @@ def get_final_target_state(final_input_state: np.ndarray) -> np.ndarray:
 ##################################################################
 
 
-def construct_target(size: int, terms: list[str], strengths: list[float]) -> np.ndarray:
+def construct_target(size: int, terms: list[str], strengths: list[float]) -> np.Tensor:
     """Construct target Hamiltonian. Specify the terms to include as a list of strings.
 
     Args:
@@ -79,12 +80,12 @@ def construct_target(size: int, terms: list[str], strengths: list[float]) -> np.
         strenghs (list[float]): the strengths of the terms, in the same order as `terms`.
 
     Returns:
-        np.ndarray: the target Hamiltonian.
+        np.Tensor: the target Hamiltonian.
     """
-    H = np.zeros([2**size, 2**size])
+    H = np.zeros([2**size, 2**size], dtype=np.complex64)
     for term_i, term in enumerate(terms):
         if term == "I":
-            H += strengths[term_i] * np.identity(2**size)
+            H += strengths[term_i] * np.identity(2**size, dtype=np.complex64)
         elif term == "X":
             for i in range(size):
                 H += strengths[term_i] * term_X(size, i)
@@ -118,37 +119,37 @@ def construct_target(size: int, terms: list[str], strengths: list[float]) -> np.
         # Add more terms as needed
         else:
             raise ValueError(f"Unknown term '{term}' in custom_hamiltonian_terms.")
-    return linalg.expm(-1j * H)
+    return np.matrix_exp(-1j * H.to("cpu")).to(CFG.device)
 
 
-def construct_clusterH(size: int) -> np.ndarray:
+def construct_clusterH(size: int) -> np.Tensor:
     """Construct cluster Hamiltonian.
 
     Args:
         size (int): the size of the system.
 
     Returns:
-        np.ndarray: the cluster Hamiltonian.
+        np.Tensor: the cluster Hamiltonian.
     """
-    H = np.zeros([2**size, 2**size])
+    H = np.zeros([2**size, 2**size], dtype=np.complex64)
     for i in range(size - 2):
         H += term_XZX(size, i, i + 1, i + 2)
         H += term_Z(size, i)
     H += term_Z(size, size - 2)
     H += term_Z(size, size - 1)
-    return linalg.expm(-1j * H)
+    return np.matrix_exp(-1j * H.to("cpu")).to(CFG.device)
 
 
-def construct_RotatedSurfaceCode(size: int) -> np.ndarray:
+def construct_RotatedSurfaceCode(size: int) -> np.Tensor:
     """Construct rotated surface code Hamiltonian.
 
     Args:
         size (int): the size of the system.
 
     Returns:
-        np.ndarray: the rotated surface code Hamiltonian.
+        np.Tensor: the rotated surface code Hamiltonian.
     """
-    H = np.zeros([2**size, 2**size])
+    H = np.zeros([2**size, 2**size], dtype=np.complex64)
 
     if size == 4:
         H += -term_XXXX(size, 0, 1, 2, 3)
@@ -166,27 +167,27 @@ def construct_RotatedSurfaceCode(size: int) -> np.ndarray:
     else:
         sys.exit("system size is not 2*2 or 3*3 either")
 
-    return linalg.expm(-1j * H)
+    return np.matrix_exp(-1j * H.to("cpu")).to(CFG.device)
 
 
 def construct_ising(size):
     """Construct Ising Hamiltonian."""
-    H = np.zeros([2**size, 2**size])
+    H = np.zeros([2**size, 2**size], dtype=np.complex64)
 
     for i in range(size - 1):
         H += -term_ZZ(size, i, i + 1)
         H += -term_X(size, i)
     H += -term_X(size, size - 1)
 
-    return linalg.expm(-1j * H)
+    return np.matrix_exp(-1j * H.to("cpu")).to(CFG.device)
 
 
 ##############################################################
 # HAMILTONIAN CUSTOM TERMS
 ##############################################################
-def term_XXXX(size: int, qubit1: int, qubit2: int, qubit3: int, qubit4: int) -> np.ndarray:
+def term_XXXX(size: int, qubit1: int, qubit2: int, qubit3: int, qubit4: int) -> np.Tensor:
     """Construct a term for the Hamiltonian with four X gates acting on specified qubits."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         if (qubit1 == i) or (qubit2 == i) or (qubit3 == i) or (qubit4 == i):
             matrix = np.kron(matrix, X)
@@ -195,9 +196,9 @@ def term_XXXX(size: int, qubit1: int, qubit2: int, qubit3: int, qubit4: int) -> 
     return matrix
 
 
-def term_ZZZZ(size: int, qubit1: int, qubit2: int, qubit3: int, qubit4: int) -> np.ndarray:
+def term_ZZZZ(size: int, qubit1: int, qubit2: int, qubit3: int, qubit4: int) -> np.Tensor:
     """Construct a term for the Hamiltonian with four Z gates acting on specified qubits"""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         if (qubit1 == i) or (qubit2 == i) or (qubit3 == i) or (qubit4 == i):
             matrix = np.kron(matrix, Z)
@@ -206,9 +207,9 @@ def term_ZZZZ(size: int, qubit1: int, qubit2: int, qubit3: int, qubit4: int) -> 
     return matrix
 
 
-def term_ZZZ(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.ndarray:
+def term_ZZZ(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.Tensor:
     """Construct a term for the Hamiltonian with three Z gates acting on specified qubits."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         if (qubit1 == i) or (qubit2 == i) or (qubit3 == i):
             matrix = np.kron(matrix, Z)
@@ -217,9 +218,9 @@ def term_ZZZ(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.ndarray:
     return matrix
 
 
-def term_XZX(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.ndarray:
+def term_XZX(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.Tensor:
     """Construct a term for the Hamiltonian with X and Z gates acting on specified qubits."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         if (qubit1 == i) or (qubit3 == i):
             matrix = np.kron(matrix, X)
@@ -230,9 +231,9 @@ def term_XZX(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.ndarray:
     return matrix
 
 
-def term_XX(size: int, qubit1: int, qubit2: int) -> np.ndarray:
+def term_XX(size: int, qubit1: int, qubit2: int) -> np.Tensor:
     """Construct a term for the Hamiltonian with two X gates acting on specified qubits."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         if (qubit1 == i) or (qubit2 == i):
             matrix = np.kron(matrix, X)
@@ -241,9 +242,9 @@ def term_XX(size: int, qubit1: int, qubit2: int) -> np.ndarray:
     return matrix
 
 
-def term_ZZ(size: int, qubit1: int, qubit2: int) -> np.ndarray:
+def term_ZZ(size: int, qubit1: int, qubit2: int) -> np.Tensor:
     """Construct a term for the Hamiltonian with two Z gates acting on specified qubits."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         if (qubit1 == i) or (qubit2 == i):
             matrix = np.kron(matrix, Z)
@@ -254,7 +255,7 @@ def term_ZZ(size: int, qubit1: int, qubit2: int) -> np.ndarray:
 
 def term_XZ(size, qubit1, qubit2):
     """Construct a term for the Hamiltonian with an X gate on one qubit and a Z gate on another."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         if qubit1 == i:
             matrix = np.kron(matrix, X)
@@ -265,9 +266,9 @@ def term_XZ(size, qubit1, qubit2):
     return matrix
 
 
-def term_Z(size: int, qubit1: int) -> np.ndarray:
+def term_Z(size: int, qubit1: int) -> np.Tensor:
     """Construct a term for the Hamiltonian with a single Z gate acting on a specified qubit."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         matrix = np.kron(matrix, Z) if qubit1 == i else np.kron(matrix, I)
     return matrix
@@ -275,7 +276,7 @@ def term_Z(size: int, qubit1: int) -> np.ndarray:
 
 def term_X(size, qubit1):
     """Construct a term for the Hamiltonian with a single X gate acting on a specified qubit."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         matrix = np.kron(matrix, X) if qubit1 == i else np.kron(matrix, I)
     return matrix
@@ -283,7 +284,7 @@ def term_X(size, qubit1):
 
 def term_Y(size, qubit1):
     """Construct a term for the Hamiltonian with a single Y gate acting on a specified qubit."""
-    matrix = 1
+    matrix = np.eye(1, dtype=np.complex64)
     for i in range(size):
         matrix = np.kron(matrix, Y) if qubit1 == i else np.kron(matrix, I)
     return matrix
