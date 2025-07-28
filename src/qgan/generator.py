@@ -122,7 +122,7 @@ class Generator:
         #######################################################################
         # Get the current Generator, Target and Discriminator states:
         #######################################################################
-        final_gen_state = get_final_gen_state_for_discriminator(total_gen_state)
+        final_gen_state = get_final_gen_state_for_discriminator(total_gen_state, grad=False)
         A, B, _, phi = dis.get_dis_matrices_rep()
 
         grad_g_psi, grad_g_phi, grad_g_reg = [], [], []
@@ -134,7 +134,7 @@ class Generator:
 
             # For phi term
             total_gen_grad = self.get_total_gen_grad(i)
-            final_gen_grad = get_final_gen_state_for_discriminator(total_gen_grad)
+            final_gen_grad = get_final_gen_state_for_discriminator(total_gen_grad, grad=True)
             tmp_grad = braket(final_gen_grad, phi, final_gen_state) + braket(final_gen_state, phi, final_gen_grad)
             grad_g_phi.append(np.ndarray.item(tmp_grad))
 

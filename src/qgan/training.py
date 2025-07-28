@@ -85,7 +85,7 @@ class Training:
                     self.gen.update_gen(self.dis, self.final_target_state)
 
                 # Remove ancilla if needed, with ancilla mode, before discriminator:
-                final_gen_state = get_final_gen_state_for_discriminator(self.gen.total_gen_state)
+                final_gen_state = get_final_gen_state_for_discriminator(self.gen.total_gen_state, grad=False)
 
                 for _ in range(CFG.steps_dis):
                     self.dis.update_dis(self.final_target_state, final_gen_state)

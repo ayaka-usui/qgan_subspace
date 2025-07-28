@@ -44,7 +44,7 @@ def get_max_entangled_state_with_ancilla_if_needed(size: int) -> np.ndarray:
     return np.asmatrix(initial_state_for_gen).T, np.asmatrix(initial_state_for_target).T
 
 
-def project_ancilla_zero(state: np.ndarray, renormalize: bool = True) -> tuple[np.ndarray, float]:
+def project_ancilla_zero(state: np.ndarray, grad: bool, renormalize: bool = True) -> tuple[np.ndarray, float]:
     """Project the last qubit onto |0> and renormalize. Assumes state is a column vector.
 
     Args:
@@ -56,6 +56,11 @@ def project_ancilla_zero(state: np.ndarray, renormalize: bool = True) -> tuple[n
         float: The probability of the ancilla being in state |0>.
     """
     state = np.asarray(state).flatten()
+    original_norm = np.linalg.norm(state)
+
+    # FIXME: Remove this print after debugging
+    print("Are we in a gradient? ", grad)
+    print("Original norm, before projecting", original_norm**2)
 
     # Remove the ancilla qubit: keep only even indices:
     projected = state[::2]
@@ -64,14 +69,17 @@ def project_ancilla_zero(state: np.ndarray, renormalize: bool = True) -> tuple[n
     norm = np.linalg.norm(projected)
 
     if norm == 0:  # Return the system part (without ancilla) as zeros
-        return np.zeros((2 ** (CFG.system_size * 2), 1)), 0.0
+        return np.asmatrix(np.zeros((2 ** (CFG.system_size * 2), 1))), 0.0
 
     # Renormalize if needed:
     if renormalize:
         if CFG.ancilla_project_norm == "re-norm":
-            projected = projected / norm
+            projected = projected / norm * original_norm
         elif CFG.ancilla_project_norm != "pass":
             raise ValueError(f"Unknown ancilla_project_norm: {CFG.ancilla_project_norm}")
+
+    # FIXME: Remove this print after debugging
+    print("Probability of ancilla being in |0>: ", norm**2)
 
     return np.asmatrix(projected.reshape(-1, 1)), norm**2
 
@@ -103,7 +111,7 @@ def trace_out_ancilla(state: np.ndarray) -> np.ndarray:
     return np.asmatrix(sampled_state.reshape(-1, 1))
 
 
-def get_final_gen_state_for_discriminator(total_output_state: np.ndarray) -> np.ndarray:
+def get_final_gen_state_for_discriminator(total_output_state: np.ndarray, grad: bool) -> np.ndarray:
     """Modifies the gen state to be passed to the discriminator, according to ancilla_mode.
 
     Args:
@@ -118,7 +126,7 @@ def get_final_gen_state_for_discriminator(total_output_state: np.ndarray) -> np.
             # Pass ancilla to discriminator (current behavior)
             return total_final_state
         if CFG.ancilla_mode == "project":
-            projected, _ = project_ancilla_zero(total_final_state)
+            projected, _ = project_ancilla_zero(total_final_state, grad)
             return projected
         if CFG.ancilla_mode == "trace":
             return trace_out_ancilla(total_final_state)
