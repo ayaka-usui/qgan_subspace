@@ -54,20 +54,12 @@ def compute_cost(dis, final_target_state: np.ndarray, final_gen_state: np.ndarra
     phiterm = braket(final_gen_state, phi, final_gen_state)
 
     # fmt: off
-    term1 = braket(final_gen_state, A, final_gen_state)
-    term2 = braket(final_target_state, B, final_target_state)
+    term1 = braket(final_gen_state, A, final_gen_state) * braket(final_target_state, B, final_target_state)
+    term2 = braket(final_target_state, A, final_gen_state) * braket(final_gen_state, B, final_target_state)
+    term3 = braket(final_gen_state, A, final_target_state) * braket(final_target_state, B, final_gen_state)
+    term4 = braket(final_target_state, A, final_target_state) * braket(final_gen_state, B, final_gen_state)
 
-    term3 = braket(final_gen_state, B, final_target_state)
-    term4 = braket(final_target_state, A, final_gen_state)
-
-    term5 = braket(final_gen_state, A, final_target_state)
-    term6 = braket(final_target_state, B, final_gen_state)
-
-    term7 = braket(final_gen_state, B, final_gen_state)
-    term8 = braket(final_target_state, A, final_target_state)
-
-
-    regterm = np.ndarray.item(CFG.lamb / np.e * (CFG.cst1 * term1 * term2 - CFG.cst2 * (term3 * term4 + term5 * term6) + CFG.cst3 * term7 * term8))
+    regterm = np.ndarray.item(CFG.lamb / np.e * (CFG.cst1 * term1 - CFG.cst2 * (term2 + term3) + CFG.cst3 * term4))
     # fmt: on
 
     loss = np.real(psiterm - phiterm - regterm)
