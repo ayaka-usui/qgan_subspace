@@ -50,8 +50,8 @@ def compute_cost(dis, final_target_state: np.ndarray, final_gen_state: np.ndarra
     A, B, psi, phi = dis.get_dis_matrices_rep()
 
     # Calculate the terms for the cost function
-    psiterm = braket(final_target_state, psi, final_target_state)
-    phiterm = braket(final_gen_state, phi, final_gen_state)
+    psiterm = np.ndarray.item(braket(final_target_state, psi, final_target_state))
+    phiterm = np.ndarray.item(braket(final_gen_state, phi, final_gen_state))
 
     # fmt: off
     term1 = braket(final_gen_state, A, final_gen_state) * braket(final_target_state, B, final_target_state)
