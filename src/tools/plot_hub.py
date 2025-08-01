@@ -43,11 +43,13 @@ def generate_all_plots(base_path, log_path, n_runs, max_fidelity, common_initial
     # Plot percent of runs above max_fidelity per run
     plot_success_percent_per_run(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
 
-    # Plot separated plateaus - average best fidelity per run
-    plot_avg_best_fid_per_run_separated(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
+    # Plot separated plateaus only when there are initial plateaus
+    if common_initial_plateaus:
+        # Plot separated plateaus - average best fidelity per run
+        plot_avg_best_fid_per_run_separated(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
 
-    # Plot separated plateaus - success percent per run
-    plot_success_percent_per_run_separated(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
+        # Plot separated plateaus - success percent per run
+        plot_success_percent_per_run_separated(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
 
 
 ########################################################################
