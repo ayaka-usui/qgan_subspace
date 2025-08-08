@@ -22,16 +22,21 @@ from tools.plot_hub import find_if_common_initial_plateaus, generate_all_plots
 #######################################################################
 # Parameters for the replotting script
 #######################################################################
-time_stamp_to_replot = "2025-07-28__18-50-22_Diff_Hs_complexity_ancilla_vs_no_ancilla-from_start"
+time_stamp_to_replot = "2025-07-11__16-58-40_NEW_DATA copy"
 max_fidelity = 0.99
-x_label = "Hamiltonian"
+x_label = "Ancilla Topology"
+
 run_names = [
-    "0.2 XZX + 0.8 ZZ",
-    "+ ancilla",
-    "0.5 XZX + 0.5 ZZ",
-    "+ ancilla",
-    "0.8 XZX + 0.2 ZZ",
-    "+ ancilla",
+    "Bridge",
+    "",
+    "Total",
+    "Bridge No1Q",
+    "Ansatz",
+    "Short Bridge",
+    "Disconn.",
+    "Disconn. No1Q",
+    "",
+    "Reset",
 ]
 
 #######################################################################
