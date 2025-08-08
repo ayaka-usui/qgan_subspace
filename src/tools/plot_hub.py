@@ -23,33 +23,37 @@ import numpy as np
 from tools.data.data_managers import print_and_log
 
 mpl.use("Agg")
+import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 
 
 ########################################################################
 # MAIN PLOTTING FUNCTION
 ########################################################################
-def generate_all_plots(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus):
-    # Plot for each run
+def generate_all_plots(
+    base_path, log_path, n_runs, max_fidelity, common_initial_plateaus=None, run_names=None, x_label: str = "Run"
+):
+    """Generate all plots.
+
+    Supports backward-compatible boolean `common_initial_plateaus`
+
+    Optional `run_names` allows custom x-axis labels (list or dict mapping run index to string).
+    """
+    # 1) Histogram-style plots (unchanged)
     for run_idx in range(1, n_runs + 1):
         plot_recurrence_vs_fid(base_path, log_path, run_idx, max_fidelity, common_initial_plateaus)
-
-    # Plot all runs together (overwrites each time)
     plot_comparison_all_runs(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
 
-    # Plot average best fidelity per run
-    plot_avg_best_fid_per_run(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
-
-    # Plot percent of runs above max_fidelity per run
-    plot_success_percent_per_run(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
-
-    # Plot separated plateaus only when there are initial plateaus
-    if common_initial_plateaus:
-        # Plot separated plateaus - average best fidelity per run
-        plot_avg_best_fid_per_run_separated(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
-
-        # Plot separated plateaus - success percent per run
-        plot_success_percent_per_run_separated(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
+    # 2) Scatter-style plots (refactored)
+    if not common_initial_plateaus:
+        # from_scratch (and change): single merged scatter
+        scatter_plot(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
+    else:
+        # from_common_plateaus: four separate scatters
+        scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
+        scatter_plateau_avg_fidelity(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
+        scatter_plateau_success(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
+        scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
 
 
 ########################################################################
@@ -204,161 +208,8 @@ def plot_comparison_all_runs(base_path, log_path, n_runs, max_fidelity, common_i
 
 
 ##########################################################################
-# PLOT AVERAGE BEST FIDELITY PER RUN
-##########################################################################
-def plot_avg_best_fid_per_run(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus):
-    avgs = []
-    x_ticks = []
-    x_labels = []
-
-    for run_idx in range(1, n_runs + 1):
-        if common_initial_plateaus:
-            changed_fids = collect_latest_changed_fidelities_nested_run(base_path, run_idx)
-        else:
-            changed_fids = collect_latest_changed_fidelities_nested(base_path, common_initial_plateaus, run_idx)
-        if changed_fids:
-            avgs.append(np.nanmean(changed_fids))
-        else:
-            avgs.append(0)
-
-        n_tries = count_tries_for_run(base_path, run_idx, common_initial_plateaus)
-        x_ticks.append(run_idx)
-        x_labels.append(f"Run {run_idx}\n({n_tries} tries)")
-
-    plt.figure(figsize=(8, 5))
-    x = np.arange(1, n_runs + 1)
-    plt.plot(x, avgs, "o", color="green", label="Runs Avg", markersize=6)
-    # Add value labels above each point
-    for xi, yi in zip(x, avgs):
-        plt.text(xi, yi + 0.01, f"{yi:.3f}", ha="center", va="bottom", fontsize=9)
-    # Add control data as a distinct point if in initial mode
-    if common_initial_plateaus:
-        if control_fids := collect_max_fidelities_nested(base_path, r"repeated_control", None):
-            control_avg = np.nanmean(control_fids)
-            plt.plot([0], [control_avg], "s", color="blue", label="Control Avg", markersize=8)
-            plt.text(
-                0,
-                control_avg + 0.01,
-                f"{control_avg:.3f}",
-                ha="center",
-                va="bottom",
-                fontsize=9,
-            )
-            # Add control to x-axis labels
-            control_tries = count_tries_control(base_path)
-            x_ticks.insert(0, 0)
-            x_labels.insert(0, f"Control\n({control_tries} tries)")
-
-    plt.axhline(max_fidelity, color="C0", linestyle="--", label=f"max_fidelity={max_fidelity}")
-    plt.xlabel("Run index")
-    plt.ylabel("Average of Best Fidelity Achieved")
-
-    # Create title with number of plateaus
-    if common_initial_plateaus:
-        # Count plateaus from any run to determine total number
-        plateau_fids = collect_fidelities_by_plateau_for_run(base_path, 1)
-        n_plateaus = len(plateau_fids) if plateau_fids else 0
-        if n_plateaus > 0:
-            plt.title(f"Average Best Fidelity per Run ({n_plateaus} Plateaus Averaged)")
-        else:
-            plt.title("Average Best Fidelity per Run")
-    else:
-        plt.title("Average Best Fidelity per Run")
-
-    plt.ylim(0, 1.05)
-    plt.xticks(x_ticks, x_labels)
-    plt.grid(True, alpha=0.3)
-    if common_initial_plateaus:
-        plt.legend()
-    save_path = os.path.join(base_path, "avg_best_fidelity_per_run.png")
-    plt.tight_layout()
-    plt.savefig(save_path)
-    print_and_log(f"Saved plot to {save_path}", log_path)
-    plt.close()
-
-
-def plot_success_percent_per_run(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus):
-    percents = []
-    x_ticks = []
-    x_labels = []
-
-    for run_idx in range(1, n_runs + 1):
-        changed_fids = collect_latest_changed_fidelities_nested(base_path, common_initial_plateaus, run_idx)
-        perc = 100 * np.sum(np.array(changed_fids) >= max_fidelity) / len(changed_fids) if changed_fids else 0
-        percents.append(perc)
-
-        n_tries = count_tries_for_run(base_path, run_idx, common_initial_plateaus)
-        x_ticks.append(run_idx)
-        x_labels.append(f"Run {run_idx}\n({n_tries} tries)")
-
-    plt.figure(figsize=(8, 5))
-    x = np.arange(1, n_runs + 1)
-    plt.plot(x, percents, "o", color="red", label="Runs Success", markersize=6)
-    # Add value labels above each point
-    for xi, yi in zip(x, percents):
-        plt.text(xi, yi + 1, f"{yi:.1f}%", ha="center", va="bottom", fontsize=9)
-    # Add control data as a distinct point if in initial mode
-    if common_initial_plateaus:
-        if control_fids := collect_max_fidelities_nested(base_path, r"repeated_control", None):
-            control_success = 100 * np.sum(np.array(control_fids) >= max_fidelity) / len(control_fids)
-            plt.plot([0], [control_success], "s", color="blue", label="Control Success", markersize=8)
-            plt.text(
-                0,
-                control_success + 1,
-                f"{control_success:.1f}%",
-                ha="center",
-                va="bottom",
-                fontsize=9,
-            )
-            # Add control to x-axis labels
-            control_tries = count_tries_control(base_path)
-            x_ticks.insert(0, 0)
-            x_labels.insert(0, f"Control\n({control_tries} tries)")
-
-    plt.xlabel("Run index")
-    plt.ylabel(f"% of Runs with Fidelity ≥ {max_fidelity}")
-
-    # Create title with number of plateaus
-    if common_initial_plateaus:
-        # Count plateaus from any run to determine total number
-        plateau_fids = collect_fidelities_by_plateau_for_run(base_path, 1)
-        n_plateaus = len(plateau_fids) if plateau_fids else 0
-        if n_plateaus > 0:
-            plt.title(f"Success Rate per Run ({n_plateaus} Plateaus Averaged)")
-        else:
-            plt.title("Success Rate per Run")
-    else:
-        plt.title("Success Rate per Run")
-
-    plt.ylim(0, 105)
-    plt.xticks(x_ticks, x_labels)
-    plt.grid(True, alpha=0.3)
-    if common_initial_plateaus:
-        plt.legend()
-    save_path = os.path.join(base_path, "success_percent_per_run.png")
-    plt.savefig(save_path)
-    print_and_log(f"Saved plot to {save_path}", log_path)
-    plt.close()
-
-
-##########################################################################
 # HELPER FUNCTIONS TO COLLECT MAX FIDELITIES
 ##########################################################################
-def count_tries_for_run(base_path, run_idx, common_initial_plateaus):
-    """Count total tries for a specific run."""
-    if common_initial_plateaus:
-        changed_fids = collect_latest_changed_fidelities_nested_run(base_path, run_idx)
-    else:
-        changed_fids = collect_latest_changed_fidelities_nested(base_path, common_initial_plateaus, run_idx)
-    return len(changed_fids) if changed_fids else 0
-
-
-def count_tries_control(base_path):
-    """Count total tries for control."""
-    control_fids = collect_max_fidelities_nested(base_path, r"repeated_control", None)
-    return len(control_fids) if control_fids else 0
-
-
 def get_max_fidelity_from_file(fid_loss_path):
     if not os.path.exists(fid_loss_path):
         return None
@@ -401,7 +252,7 @@ def collect_latest_changed_fidelities_nested(base_path, common_initial_plateaus,
     run_dirs = {}
     if common_initial_plateaus:
         pattern = (
-            f"initial_plateau_(\d+)/repeated_changed_run{run_idx}/(\d+)/fidelities$"
+            rf"initial_plateau_(\d+)/repeated_changed_run{run_idx}/(\d+)/fidelities$"
             if run_idx is not None
             else r"initial_plateau_(\d+)/repeated_changed_run(\d+)/(\d+)/fidelities$"
         )
@@ -460,243 +311,6 @@ def collect_latest_changed_fidelities_nested_run(base_path, run_idx):
     return max_fids
 
 
-##########################################################################
-# PLOT AVERAGE BEST FIDELITY PER RUN - SEPARATED PLATEAUS
-##########################################################################
-def plot_avg_best_fid_per_run_separated(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus):
-    plt.figure(figsize=(10, 6))
-
-    # Collect x-axis positions and labels
-    x_ticks = []
-    x_labels = []
-    plateau_data_by_run = {}
-
-    # Collect and plot data for each run
-    for run_idx in range(1, n_runs + 1):
-        if common_initial_plateaus:
-            # Get fidelities grouped by plateau for this run
-            plateau_fids = collect_fidelities_by_plateau_for_run(base_path, run_idx)
-            run_avgs = []
-            total_tries = sum(len(plateau_data) for plateau_data in plateau_fids.values())
-            for plateau_num, plateau_data in sorted(plateau_fids.items()):
-                avg = np.nanmean(plateau_data) if plateau_data else 0
-                run_avgs.append(avg)
-                # Store plateau data for connecting lines
-                if plateau_num not in plateau_data_by_run:
-                    plateau_data_by_run[plateau_num] = {}
-                plateau_data_by_run[plateau_num][run_idx] = avg
-        else:
-            # For non-plateau mode, same as regular plot
-            changed_fids = collect_latest_changed_fidelities_nested(base_path, common_initial_plateaus, run_idx)
-            avg = np.nanmean(changed_fids) if changed_fids else 0
-            run_avgs = [avg]
-            total_tries = len(changed_fids) if changed_fids else 0
-
-        # Plot points for this run with small horizontal offset for visibility
-        x_positions = [run_idx + np.random.uniform(-0.1, 0.1) for _ in run_avgs]
-        plt.scatter(x_positions, run_avgs, alpha=0.7, s=40)
-
-        x_ticks.append(run_idx)
-        x_labels.append(f"Run {run_idx}\n({total_tries} tries)")
-
-    # Add control data if in plateau mode
-    if common_initial_plateaus:
-        if control_plateau_fids := collect_fidelities_by_plateau_control(base_path):
-            control_avgs = []
-            total_control_tries = sum(len(plateau_data) for plateau_data in control_plateau_fids.values())
-            for plateau_num, plateau_data in sorted(control_plateau_fids.items()):
-                avg = np.nanmean(plateau_data) if plateau_data else 0
-                control_avgs.append(avg)
-                # Store control plateau data for connecting lines
-                if plateau_num not in plateau_data_by_run:
-                    plateau_data_by_run[plateau_num] = {}
-                plateau_data_by_run[plateau_num][0] = avg
-            x_positions = [0 + np.random.uniform(-0.1, 0.1) for _ in control_avgs]
-            plt.scatter(x_positions, control_avgs, alpha=0.7, s=50, color="blue", marker="s")
-
-            x_ticks.insert(0, 0)
-            x_labels.insert(0, f"Control\n({total_control_tries} tries)")
-
-    # Connect same plateaus with lines
-    if common_initial_plateaus:
-        colors = plt.cm.Set3(np.linspace(0, 1, len(plateau_data_by_run)))
-        for i, (plateau_num, plateau_data) in enumerate(sorted(plateau_data_by_run.items())):
-            x_coords = []
-            y_coords = []
-            for run_idx in sorted(plateau_data.keys()):
-                x_coords.append(run_idx)
-                y_coords.append(plateau_data[run_idx])
-            plt.plot(x_coords, y_coords, "--", alpha=0.5, color=colors[i])
-
-    plt.axhline(max_fidelity, color="C0", linestyle="--", label=f"max_fidelity={max_fidelity}")
-    plt.xlabel("Run index")
-    plt.ylabel("Average of Best Fidelity Achieved")
-
-    # Create title with number of plateaus
-    if common_initial_plateaus and plateau_data_by_run:
-        n_plateaus = len(plateau_data_by_run)
-        plt.title(f"Average Best Fidelity per Run ({n_plateaus} Plateaus Separated)")
-    else:
-        plt.title("Average Best Fidelity per Run (Plateaus Separated)")
-
-    plt.ylim(0, 1.05)
-    plt.xticks(x_ticks, x_labels)
-    plt.grid(True, alpha=0.3)
-
-    # Create simple legend like non-separated plots
-    legend_elements = []
-    legend_elements.append(
-        plt.Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="w",
-            markerfacecolor="gray",
-            markersize=6,
-            alpha=0.7,
-            linestyle="None",
-            label="Runs Avg",
-        )
-    )
-    if common_initial_plateaus and any("Control" in label for label in x_labels):
-        legend_elements.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker="s",
-                color="w",
-                markerfacecolor="blue",
-                markersize=8,
-                alpha=0.7,
-                linestyle="None",
-                label="Control Avg",
-            )
-        )
-    legend_elements.append(plt.Line2D([0], [0], color="C0", linestyle="--", label=f"max_fidelity={max_fidelity}"))
-    plt.legend(handles=legend_elements)
-    save_path = os.path.join(base_path, "avg_best_fidelity_per_run_separated.png")
-    plt.tight_layout()
-    plt.savefig(save_path)
-    print_and_log(f"Saved plot to {save_path}", log_path)
-    plt.close()
-
-
-def plot_success_percent_per_run_separated(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus):
-    plt.figure(figsize=(10, 6))
-
-    # Collect x-axis positions and labels
-    x_ticks = []
-    x_labels = []
-    plateau_data_by_run = {}
-
-    # Collect and plot data for each run
-    for run_idx in range(1, n_runs + 1):
-        if common_initial_plateaus:
-            # Get fidelities grouped by plateau for this run
-            plateau_fids = collect_fidelities_by_plateau_for_run(base_path, run_idx)
-            run_percents = []
-            total_tries = sum(len(plateau_data) for plateau_data in plateau_fids.values())
-            for plateau_num, plateau_data in sorted(plateau_fids.items()):
-                perc = 100 * np.sum(np.array(plateau_data) >= max_fidelity) / len(plateau_data) if plateau_data else 0
-                run_percents.append(perc)
-                # Store plateau data for connecting lines
-                if plateau_num not in plateau_data_by_run:
-                    plateau_data_by_run[plateau_num] = {}
-                plateau_data_by_run[plateau_num][run_idx] = perc
-        else:
-            # For non-plateau mode, same as regular plot
-            changed_fids = collect_latest_changed_fidelities_nested(base_path, common_initial_plateaus, run_idx)
-            perc = 100 * np.sum(np.array(changed_fids) >= max_fidelity) / len(changed_fids) if changed_fids else 0
-            run_percents = [perc]
-            total_tries = len(changed_fids) if changed_fids else 0
-
-        # Plot points for this run with small horizontal offset for visibility
-        x_positions = [run_idx + np.random.uniform(-0.1, 0.1) for _ in run_percents]
-        plt.scatter(x_positions, run_percents, alpha=0.7, s=40)
-
-        x_ticks.append(run_idx)
-        x_labels.append(f"Run {run_idx}\n({total_tries} tries)")
-
-    # Add control data if in plateau mode
-    if common_initial_plateaus:
-        if control_plateau_fids := collect_fidelities_by_plateau_control(base_path):
-            control_percents = []
-            total_control_tries = sum(len(plateau_data) for plateau_data in control_plateau_fids.values())
-            for plateau_num, plateau_data in sorted(control_plateau_fids.items()):
-                perc = 100 * np.sum(np.array(plateau_data) >= max_fidelity) / len(plateau_data) if plateau_data else 0
-                control_percents.append(perc)
-                # Store control plateau data for connecting lines
-                if plateau_num not in plateau_data_by_run:
-                    plateau_data_by_run[plateau_num] = {}
-                plateau_data_by_run[plateau_num][0] = perc
-            x_positions = [0 + np.random.uniform(-0.1, 0.1) for _ in control_percents]
-            plt.scatter(x_positions, control_percents, alpha=0.7, s=50, color="blue", marker="s")
-
-            x_ticks.insert(0, 0)
-            x_labels.insert(0, f"Control\n({total_control_tries} tries)")
-
-    # Connect same plateaus with lines
-    if common_initial_plateaus:
-        colors = plt.cm.Set3(np.linspace(0, 1, len(plateau_data_by_run)))
-        for i, (plateau_num, plateau_data) in enumerate(sorted(plateau_data_by_run.items())):
-            x_coords = []
-            y_coords = []
-            for run_idx in sorted(plateau_data.keys()):
-                x_coords.append(run_idx)
-                y_coords.append(plateau_data[run_idx])
-            plt.plot(x_coords, y_coords, "--", alpha=0.5, color=colors[i])
-
-    plt.xlabel("Run index")
-    plt.ylabel(f"% of Runs with Fidelity ≥ {max_fidelity}")
-
-    # Create title with number of plateaus
-    if common_initial_plateaus and plateau_data_by_run:
-        n_plateaus = len(plateau_data_by_run)
-        plt.title(f"Success Rate per Run ({n_plateaus} Plateaus Separated)")
-    else:
-        plt.title("Success Rate per Run (Plateaus Separated)")
-
-    plt.ylim(0, 105)
-    plt.xticks(x_ticks, x_labels)
-    plt.grid(True, alpha=0.3)
-
-    # Create simple legend like non-separated plots
-    legend_elements = []
-    legend_elements.append(
-        plt.Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="w",
-            markerfacecolor="red",
-            markersize=6,
-            alpha=0.7,
-            linestyle="None",
-            label="Runs Success",
-        )
-    )
-    if common_initial_plateaus and any("Control" in label for label in x_labels):
-        legend_elements.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker="s",
-                color="w",
-                markerfacecolor="blue",
-                markersize=8,
-                alpha=0.7,
-                linestyle="None",
-                label="Control Success",
-            )
-        )
-    plt.legend(handles=legend_elements)
-    save_path = os.path.join(base_path, "success_percent_per_run_separated.png")
-    plt.tight_layout()
-    plt.savefig(save_path)
-    print_and_log(f"Saved plot to {save_path}", log_path)
-    plt.close()
-
-
 def collect_fidelities_by_plateau_for_run(base_path, run_idx):
     """Collect fidelities grouped by plateau for a specific run."""
     plateau_fids = {}
@@ -727,3 +341,428 @@ def collect_fidelities_by_plateau_control(base_path):
                     plateau_fids[plateau_num] = []
                 plateau_fids[plateau_num].append(max_fid)
     return plateau_fids
+
+
+# Helpers for labels
+def _label_for_run(run_idx, tries, run_names=None):
+    if isinstance(run_names, dict):
+        base = run_names.get(run_idx, f"Run {run_idx}")
+    elif isinstance(run_names, (list, tuple)) and 0 <= run_idx - 1 < len(run_names):
+        base = str(run_names[run_idx - 1])
+    else:
+        base = f"Run {run_idx}"
+    if tries and tries > 0:
+        return f"{base}\n({tries} tries)"
+    return base
+
+
+def _base_label_for_run(run_idx, run_names=None):
+    """Return the base label for a run without tries count."""
+    if isinstance(run_names, dict):
+        return run_names.get(run_idx, f"Run {run_idx}")
+    if isinstance(run_names, (list, tuple)) and 0 <= run_idx - 1 < len(run_names):
+        return str(run_names[run_idx - 1])
+    return f"Run {run_idx}"
+
+
+def _draw_tries_sublabels(ax, x_positions, tries_counts, fontsize=8, y_offset=-0.045, color="0.35"):
+    """Draw smaller '(X tries)' sublabels below the x-axis tick labels.
+
+    Uses the x-axis transform so x is in data coords and y is in axes coords.
+    """
+    for x, t in zip(x_positions, tries_counts):
+        if t and t > 0:
+            ax.text(
+                x,
+                y_offset,
+                f"({t} tries)",
+                transform=ax.get_xaxis_transform(),
+                ha="center",
+                va="top",
+                fontsize=fontsize,
+                color=color,
+            )
+
+
+########################################################################
+# FROM SCRATCH SCATTER PLOTS
+########################################################################
+def scatter_plot(base_path, log_path, n_runs, max_fidelity, run_names=None, x_label: str = "Run"):
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax2 = ax1.twinx()  # Right axis for percentages
+    # Threshold line on left axis
+    ax1.axhline(max_fidelity, color="C0", linestyle="--", label=f"max_fidelity={max_fidelity}")
+
+    # Plot clouds and compute averages
+    avg_fid_percent = []
+    avg_success_percent = []
+    x_ticks = []
+    base_labels = []
+    tries_counts = []
+
+    for run_idx in range(1, n_runs + 1):
+        vals = collect_latest_changed_fidelities_nested(base_path, False, run_idx)
+        tries = len(vals) if vals else 0
+        # Cloud on left axis
+        if vals:
+            xs = [run_idx + np.random.uniform(-0.12, 0.12) for _ in vals]
+            ax1.scatter(xs, vals, color="gray", alpha=0.4, s=18)
+        avg_f = (np.nanmean(vals) * 100) if vals else 0.0
+        avg_s = (100.0 * np.sum(np.array(vals) >= max_fidelity) / tries) if tries > 0 else 0.0
+        avg_fid_percent.append(avg_f)
+        avg_success_percent.append(avg_s)
+
+        # Centered overlays on right axis
+        ax2.scatter([run_idx], [avg_f], color="green", edgecolors="black", linewidths=0.5, s=60, zorder=3)
+        ax2.scatter([run_idx], [avg_s], color="red", marker="D", s=50, zorder=3)
+        # Annotations for averages (moved to the right of the points)
+        t1 = ax2.text(
+            run_idx + 0.07,
+            avg_f,
+            f"{avg_f:.1f}%",
+            ha="left",
+            va="center",
+            fontsize=10,
+            color="green",
+        )
+        t1.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+        t2 = ax2.text(
+            run_idx + 0.07,
+            avg_s,
+            f"{avg_s:.1f}%",
+            ha="left",
+            va="center",
+            fontsize=10,
+            color="red",
+        )
+        t2.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+
+        x_ticks.append(run_idx)
+        base_labels.append(_base_label_for_run(run_idx, run_names))
+        tries_counts.append(tries)
+
+    # Axes labels
+    ax1.set_ylabel("Best Fidelity Achieved in each Repetition")
+    ax2.set_ylabel("Average/Success rate of each run (%)")
+    ax1.set_xlabel(x_label, labelpad=18)
+    ax1.set_xticks(x_ticks)
+    ax1.set_xticklabels(base_labels)
+    # draw smaller tries text under the main labels
+    _draw_tries_sublabels(ax1, x_ticks, tries_counts, fontsize=8)
+    # add a bit more bottom margin for the sublabels
+    fig.subplots_adjust(bottom=0.24)
+
+    ax1.set_ylim(0, 1.05)
+    ax2.set_ylim(0, 105)
+    ax1.grid(True, alpha=0.3)
+
+    # Legend
+    handles = [
+        plt.Line2D([0], [0], color="C0", linestyle="--", label=f"Max fidelity ({max_fidelity:.2f})"),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor="gray",
+            alpha=0.4,
+            markersize=6,
+            linestyle="None",
+            label="Repetitions",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor="green",
+            markeredgecolor="black",
+            markersize=7,
+            linestyle="None",
+            label="Avg Best Fidelity (%)",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="D",
+            color="w",
+            markerfacecolor="red",
+            markersize=7,
+            linestyle="None",
+            label="Success Rate (%)",
+        ),
+    ]
+    ax1.legend(handles=handles, loc="best")
+
+    save_path = os.path.join(base_path, "scatter_plot.png")
+    fig.tight_layout()
+    fig.savefig(save_path)
+    print_and_log(f"Saved plot to {save_path}", log_path)
+    plt.close(fig)
+
+
+########################################################################
+# PLATEAUS SCATTERS PLOTS
+########################################################################
+def _collect_all_plateau_ids(base_path):
+    ids = set()
+    # look for initial_plateau_X
+    for root, dirs, files in os.walk(base_path):
+        m = re.search(r"initial_plateau_(\d+)(?=/|$)", root)
+        if m:
+            ids.add(int(m[1]))
+    return sorted(ids)
+
+
+def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=None, x_label: str = "Run"):
+    plt.figure(figsize=(10, 6))
+    plt.axhline(max_fidelity, color="C0", linestyle="--", label=f"max_fidelity={max_fidelity}")
+    ax = plt.gca()
+    plateau_ids = _collect_all_plateau_ids(base_path)
+    cmap = plt.cm.get_cmap("tab20", max(1, len(plateau_ids)))
+    plateau_colors = {pid: cmap(i % cmap.N) for i, pid in enumerate(plateau_ids)}
+
+    x_ticks, base_labels, tries_counts = [], [], []
+
+    for run_idx in range(1, n_runs + 1):
+        plateau_fids = collect_fidelities_by_plateau_for_run(base_path, run_idx)
+        tries = sum(len(v) for v in plateau_fids.values()) if plateau_fids else 0
+        for pid, vals in plateau_fids.items():
+            if not vals:
+                continue
+            xs = [run_idx + np.random.uniform(-0.12, 0.12) for _ in vals]
+            plt.scatter(xs, vals, color=plateau_colors.get(pid, "gray"), alpha=0.6, s=18, label=None)
+        x_ticks.append(run_idx)
+        base_labels.append(_base_label_for_run(run_idx, run_names))
+        tries_counts.append(tries)
+
+    plt.ylabel("Best Fidelity Achieved in each Repetition")
+    plt.xlabel(x_label, labelpad=18)
+    plt.xticks(x_ticks, base_labels)
+    # small sublabels under ticks
+    _draw_tries_sublabels(ax, x_ticks, tries_counts, fontsize=8)
+    ax.figure.subplots_adjust(bottom=0.24)
+
+    plt.ylim(0, 1.05)
+    plt.grid(True, alpha=0.3)
+
+    # legend for plateaus + threshold
+    threshold_handle = plt.Line2D([0], [0], color="C0", linestyle="--", label=f"Max fidelity ({max_fidelity:.2f})")
+    plateau_handles = [
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor=plateau_colors[pid],
+            markersize=6,
+            linestyle="None",
+            label=f"Plateau {pid}",
+        )
+        for pid in plateau_ids
+    ]
+    handles = [threshold_handle, *plateau_handles]
+    if handles:
+        plt.legend(handles=handles, loc="best")
+
+    save_path = os.path.join(base_path, "scatter_plateau_clouds.png")
+    plt.tight_layout()
+    plt.savefig(save_path)
+    print_and_log(f"Saved plot to {save_path}", log_path)
+    plt.close()
+
+
+def scatter_plateau_avg_fidelity(base_path, log_path, n_runs, max_fidelity, run_names=None, x_label: str = "Run"):
+    plt.figure(figsize=(10, 6))
+    plt.axhline(max_fidelity, color="C0", linestyle="--", label=f"max_fidelity={max_fidelity}")
+    ax = plt.gca()
+    plateau_ids = _collect_all_plateau_ids(base_path)
+    cmap = plt.cm.get_cmap("tab20", max(1, len(plateau_ids)))
+    plateau_colors = {pid: cmap(i % cmap.N) for i, pid in enumerate(plateau_ids)}
+
+    x_ticks, base_labels, tries_counts = [], [], []
+    plateau_series = {pid: {} for pid in plateau_ids}
+
+    for run_idx in range(1, n_runs + 1):
+        plateau_fids = collect_fidelities_by_plateau_for_run(base_path, run_idx)
+        tries = sum(len(v) for v in plateau_fids.values()) if plateau_fids else 0
+        for pid in plateau_ids:
+            vals = plateau_fids.get(pid, [])
+            if vals:
+                avg = float(np.nanmean(vals))
+                plateau_series[pid][run_idx] = avg
+                plt.scatter([run_idx], [avg], color=plateau_colors[pid], s=45)
+        x_ticks.append(run_idx)
+        base_labels.append(_base_label_for_run(run_idx, run_names))
+        tries_counts.append(tries)
+
+    # connect lines per plateau
+    for pid, series in plateau_series.items():
+        if len(series) > 1:
+            xs = sorted(series.keys())
+            ys = [series[i] for i in xs]
+            plt.plot(xs, ys, "--", color=plateau_colors[pid], alpha=0.7)
+
+    plt.ylabel("Average Best Fidelity per Plateau")
+    plt.xlabel(x_label)
+    plt.xticks(x_ticks, base_labels)
+    _draw_tries_sublabels(ax, x_ticks, tries_counts, fontsize=8)
+    ax.figure.subplots_adjust(bottom=0.2)
+
+    plt.ylim(0, 1.05)
+    plt.grid(True, alpha=0.3)
+
+    # Add threshold to legend
+    threshold_handle = plt.Line2D([0], [0], color="C0", linestyle="--", label=f"Max fidelity ({max_fidelity:.2f})")
+    plateau_handles = [
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor=plateau_colors[pid],
+            markersize=6,
+            linestyle="None",
+            label=f"Plateau {pid}",
+        )
+        for pid in plateau_ids
+    ]
+    handles = [threshold_handle, *plateau_handles]
+    if handles:
+        plt.legend(handles=handles, loc="best")
+
+    save_path = os.path.join(base_path, "scatter_plateau_avg_fidelity.png")
+    plt.tight_layout()
+    plt.savefig(save_path)
+    print_and_log(f"Saved plot to {save_path}", log_path)
+    plt.close()
+
+
+def scatter_plateau_success(base_path, log_path, n_runs, max_fidelity, run_names=None, x_label: str = "Run"):
+    plt.figure(figsize=(10, 6))
+    # no fidelity line here; axis is success %
+    ax = plt.gca()
+    plateau_ids = _collect_all_plateau_ids(base_path)
+    cmap = plt.cm.get_cmap("tab20", max(1, len(plateau_ids)))
+    plateau_colors = {pid: cmap(i % cmap.N) for i, pid in enumerate(plateau_ids)}
+
+    x_ticks, base_labels, tries_counts = [], [], []
+    plateau_series = {pid: {} for pid in plateau_ids}
+
+    for run_idx in range(1, n_runs + 1):
+        plateau_fids = collect_fidelities_by_plateau_for_run(base_path, run_idx)
+        tries = sum(len(v) for v in plateau_fids.values()) if plateau_fids else 0
+        for pid in plateau_ids:
+            vals = plateau_fids.get(pid, [])
+            if vals:
+                succ = 100.0 * np.sum(np.array(vals) >= max_fidelity) / len(vals)
+                plateau_series[pid][run_idx] = succ
+                plt.scatter([run_idx], [succ], color=plateau_colors[pid], s=45)
+        x_ticks.append(run_idx)
+        base_labels.append(_base_label_for_run(run_idx, run_names))
+        tries_counts.append(tries)
+
+    # connect lines per plateau
+    for pid, series in plateau_series.items():
+        if len(series) > 1:
+            xs = sorted(series.keys())
+            ys = [series[i] for i in xs]
+            plt.plot(xs, ys, "--", color=plateau_colors[pid], alpha=0.7)
+
+    plt.ylabel("Success Rate per Plateau (%)")
+    plt.xlabel(x_label, labelpad=18)
+    plt.xticks(x_ticks, base_labels)
+    _draw_tries_sublabels(ax, x_ticks, tries_counts, fontsize=8)
+    ax.figure.subplots_adjust(bottom=0.24)
+
+    plt.ylim(0, 105)
+    plt.grid(True, alpha=0.3)
+
+    save_path = os.path.join(base_path, "scatter_plateau_success.png")
+    plt.tight_layout()
+    plt.savefig(save_path)
+    print_and_log(f"Saved plot to {save_path}", log_path)
+    plt.close()
+
+
+def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names=None, x_label: str = "Run"):
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax2 = ax1.twinx()
+    ax1.axhline(max_fidelity, color="C0", linestyle="--", label=f"max_fidelity={max_fidelity}")
+
+    x_ticks, base_labels, tries_counts = [], [], []
+
+    for run_idx in range(1, n_runs + 1):
+        plateau_fids = collect_fidelities_by_plateau_for_run(base_path, run_idx)
+        # flatten values
+        vals = [v for lst in plateau_fids.values() for v in lst]
+        tries = len(vals)
+        avg_fid = np.nanmean(vals) if vals else 0.0
+        avg_succ = (100.0 * np.sum(np.array(vals) >= max_fidelity) / tries) if tries > 0 else 0.0
+        # right axis: percentages overlays
+        ax2.scatter([run_idx], [avg_fid * 100], color="green", edgecolors="black", linewidths=0.5, s=60)
+        ax2.scatter([run_idx], [avg_succ], color="red", marker="D", s=55)
+        x_ticks.append(run_idx)
+        base_labels.append(_base_label_for_run(run_idx, run_names))
+        tries_counts.append(tries)
+
+    ax1.set_ylabel("Average Best Fidelity (no %)")
+    ax2.set_ylabel("Average/Success rate of each run (%)")
+    ax1.set_xlabel(x_label, labelpad=18)
+    ax1.set_xticks(x_ticks)
+    ax1.set_xticklabels(base_labels)
+    _draw_tries_sublabels(ax1, x_ticks, tries_counts, fontsize=8)
+    fig.subplots_adjust(bottom=0.24)
+
+    ax1.set_ylim(0, 1.05)
+    ax2.set_ylim(0, 105)
+    ax1.grid(True, alpha=0.3)
+
+    handles = [
+        plt.Line2D([0], [0], color="C0", linestyle="--", label=f"Max fidelity ({max_fidelity:.2f})"),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor="green",
+            markeredgecolor="black",
+            markersize=7,
+            linestyle="None",
+            label="Avg Best Fidelity (%)",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="D",
+            color="w",
+            markerfacecolor="red",
+            markersize=7,
+            linestyle="None",
+            label="Success Rate (%)",
+        ),
+    ]
+    ax1.legend(handles=handles, loc="best")
+
+    save_path = os.path.join(base_path, "scatter_plateau_overall.png")
+    fig.tight_layout()
+    fig.savefig(save_path)
+    print_and_log(f"Saved plot to {save_path}", log_path)
+    plt.close(fig)
+
+
+def find_if_common_initial_plateaus(base_path):
+    """
+    Check if the folder structure indicates common initial plateaus.
+    Returns True if 'initial_plateau_X' folders are found, False otherwise.
+    """
+    # Auto-detect whether this run used common initial plateaus
+    try:
+        plateau_dirs = [
+            d
+            for d in os.listdir(base_path)
+            if d.startswith("initial_plateau_") and os.path.isdir(os.path.join(base_path, d))
+        ]
+        return len(plateau_dirs) > 0
+    except FileNotFoundError:
+        return False
