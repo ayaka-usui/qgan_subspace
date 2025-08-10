@@ -43,13 +43,28 @@ x_label = "Ancilla Topology"
 # time_stamp_to_replot = "2025-08-06__00-23-46-Adding-ancilla-mid-run"
 # run_names = ["Bridge NoRand", "Bridge Rand", "Total NoRand", "Total Rand"]
 
-# time_stamp_to_replot = "2025-08-06__00-35-39_Fid-vs-Epochs [DONE]"
-# run_names = ["1", "3", "5", "10", "20"]
-# x_label = "Epochs"
+time_stamp_to_replot = "2025-08-06__00-35-39_Fid-vs-Epochs [DONE]"
+run_names = ["1", "3", "5", "10", "20"]
+x_label = "Epochs"
 
-time_stamp_to_replot = "2025-08-08__01-11-23"
-x_label = "Gen - Dis steps"
-run_names = ["1-1", "2-1", "1-2", "2-2", "5-1", "1-5", "5-5", "10-10"]
+# time_stamp_to_replot = "2025-08-08__01-11-23"
+# x_label = "Gen - Dis steps"
+# run_names = ["1-1", "2-1", "1-2", "2-2", "5-1", "1-5", "5-5", "10-10"]
+
+# time_stamp_to_replot = "2025-07-28__15-38-23-Diff-ancilla-topologies-from-start [DONE]"
+# x_label = "Ancilla Topology"
+# run_names = ["No Ancilla", "Bridge", "Short Bridge", "Ansatz", "Bridge No1Q", "Total"]
+
+# time_stamp_to_replot = "2025-07-28__18-50-22_Diff_Hs_complexity_ancilla_vs_no_ancilla-from_start [DONE]"
+# x_label = "Target Hamiltonian"
+# run_names = [
+#     "0.2 XZX + 0.8 ZZ",
+#     "+ ancilla",
+#     "0.5 XZX + 0.5 ZZ",
+#     "+ ancilla",
+#     "0.8 XZX + 0.2 ZZ",
+#     "+ ancilla",
+# ]
 
 
 #######################################################################
