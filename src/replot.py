@@ -26,26 +26,26 @@ from tools.plot_hub import find_if_common_initial_plateaus, generate_all_plots
 max_fidelity = 0.99
 x_label = "Ancilla Topology"
 
-# time_stamp_to_replot = "2025-07-11__16-58-40_NEW_DATA"
-# run_names = [
-#     "Bridge",
-#     "Total",
-#     "",
-#     "Bridge No1Q",
-#     "Ansatz",
-#     "Short Bridge",
-#     "Disconn.",
-#     "Disconn. No1Q",
-#     "",
-#     "Reset",
-# ]
+time_stamp_to_replot = "2025-07-11__16-58-40_NEW_DATA"
+run_names = [
+    "Bridge",
+    "Total",
+    "",
+    "Bridge No1Q",
+    "Ansatz",
+    "Short Bridge",
+    "Disconn.",
+    "Disconn. No1Q",
+    "",
+    "Reset",
+]
 
 # time_stamp_to_replot = "2025-08-06__00-23-46-Adding-ancilla-mid-run"
 # run_names = ["Bridge NoRand", "Bridge Rand", "Total NoRand", "Total Rand"]
 
-time_stamp_to_replot = "2025-08-06__00-35-39_Fid-vs-Epochs [DONE]"
-run_names = ["1", "3", "5", "10", "20"]
-x_label = "Epochs"
+# time_stamp_to_replot = "2025-08-06__00-35-39_Fid-vs-Epochs [DONE]"
+# run_names = ["1", "3", "5", "10", "20"]
+# x_label = "Epochs"
 
 # time_stamp_to_replot = "2025-08-08__01-11-23"
 # x_label = "Gen - Dis steps"
