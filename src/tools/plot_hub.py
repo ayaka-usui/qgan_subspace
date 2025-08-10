@@ -221,7 +221,7 @@ def get_max_fidelity_from_file(fid_loss_path):
         else:
             fidelities = data[0] if data.shape[0] < data.shape[1] else data[:, 0]
         return np.max(fidelities)
-    except (OSError, ValueError):
+    except (OSError, IOError, ValueError):
         return None
 
 
