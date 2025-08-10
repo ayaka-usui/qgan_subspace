@@ -64,7 +64,13 @@ run_names = [
 #     "+ ancilla",
 #     "0.8 XZX + 0.2 ZZ",
 #     "+ ancilla",
-# ]
+# # ]
+
+# time_stamp_to_replot = (
+#     "2025-07-11__16-58-40_escaping_plateaus_with_ancilla [MAIN]/2025-07-11__16-58-40_1st_best_plateau(13)"
+# )
+# x_label = ""
+# run_names = ["Adding Ancilla"]
 
 
 #######################################################################
