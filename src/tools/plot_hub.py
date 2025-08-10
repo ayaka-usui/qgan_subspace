@@ -865,8 +865,8 @@ def scatter_plateau_success(base_path, log_path, n_runs, max_fidelity, run_names
 def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names=None, x_label: str = "Run"):
     fig, ax1 = plt.subplots(figsize=(10, 6))
     ax2 = ax1.twinx()
-    # Threshold in percent on left axis
-    ax1.axhline(100 * max_fidelity, color="C0", linestyle="-", label=f"max_fidelity={max_fidelity}")
+    # Removed threshold line for the overall plot
+    # ax1.axhline(100 * max_fidelity, color="C0", linestyle="-", label=f"max_fidelity={max_fidelity}")
 
     x_ticks, base_labels, tries_counts = [], [], []
 
@@ -917,34 +917,40 @@ def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names
         tries = len(vals)
         avg_fid = float(np.nanmean(vals) * 100.0) if vals else 0.0
         avg_succ = (100.0 * np.sum(np.array(vals) >= max_fidelity) / tries) if tries > 0 else 0.0
-        # Avg fidelity on left (green circle), success on right (red diamond)
-        ax1.scatter([run_idx], [avg_fid], color="green", edgecolors="black", linewidths=0.5, s=60)
-        ax2.scatter([run_idx], [avg_succ], color="red", marker="D", s=55)
-        # tags
-        t1 = ax1.text(
-            run_idx + 0.1,
-            avg_fid,
-            f"{avg_fid:.1f}%",
-            ha="left",
-            va="center",
-            fontsize=10,
-            color="green",
-            zorder=100,
-            bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
-        )
-        t1.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
-        t2 = ax2.text(
-            run_idx + 0.1,
-            avg_succ,
-            f"{avg_succ:.1f}%",
-            ha="left",
-            va="center",
-            fontsize=10,
-            color="red",
-            zorder=100,
-            bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
-        )
-        t2.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+
+        # Only if there is data for this run
+        if tries > 0:
+            # Avg fidelity on left (green circle)
+            ax1.scatter([run_idx], [avg_fid], color="green", edgecolors="black", linewidths=0.5, s=60)
+            # Avg success on right (red diamond)
+            ax2.scatter([run_idx], [avg_succ], color="red", marker="D", s=55)
+
+            # tags
+            t1 = ax1.text(
+                run_idx + 0.1,
+                avg_fid,
+                f"{avg_fid:.1f}%",
+                ha="left",
+                va="center",
+                fontsize=10,
+                color="green",
+                zorder=100,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
+            )
+            t1.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+
+            t2 = ax2.text(
+                run_idx + 0.1,
+                avg_succ,
+                f"{avg_succ:.1f}%",
+                ha="left",
+                va="center",
+                fontsize=10,
+                color="red",
+                zorder=100,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
+            )
+            t2.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
         x_ticks.append(run_idx)
         base_labels.append(_base_label_for_run(run_idx, run_names))
         tries_counts.append(tries)
@@ -961,8 +967,8 @@ def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names
     ax2.set_ylim(0, 105)
     ax1.grid(True, alpha=0.3)
 
+    # Updated legend without threshold entry
     handles = [
-        plt.Line2D([0], [0], color="C0", linestyle="-", label=f"Max fidelity ({max_fidelity:.2f})"),
         plt.Line2D(
             [0],
             [0],
