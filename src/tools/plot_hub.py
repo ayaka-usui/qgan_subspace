@@ -499,7 +499,7 @@ def scatter_plot(base_path, log_path, n_runs, max_fidelity, run_names=None, x_la
             label="Run Success Rate (%)",
         ),
     ]
-    ax1.legend(handles=handles, loc="upper left")
+    ax1.legend(handles=handles, loc="best")
 
     save_path = os.path.join(base_path, "scatter_plot.png")
     fig.tight_layout()
