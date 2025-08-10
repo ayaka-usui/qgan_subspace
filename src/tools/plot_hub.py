@@ -670,7 +670,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
             label="Control (both)",
         ),
     ]
-    plt.legend(handles=handles, loc="upper left")
+    plt.legend(handles=handles, loc="best")
 
     save_path = os.path.join(base_path, "scatter_plateau_clouds.png")
     plt.tight_layout()
