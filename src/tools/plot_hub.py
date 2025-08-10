@@ -537,16 +537,14 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
                 continue
             xs = _make_jittered_xs(0, len(vals))
             ax.scatter(xs, [v * 100 for v in vals], color="gray", alpha=0.7, s=18, label=None)
-        # Control overall averages: blue squares on both axes (slight nudge to avoid overlap)
+        # Control overall averages: blue squares centered at x=0 on both axes
         control_vals_flat = [v for lst in control_plateau_fids.values() for v in lst]
         if control_vals_flat:
             overall_fid = float(np.nanmean(control_vals_flat)) * 100.0
             overall_succ = 100.0 * np.sum(np.array(control_vals_flat) >= max_fidelity) / len(control_vals_flat)
-            ax.scatter(
-                [0 - 0.06], [overall_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
-            )
+            ax.scatter([0], [overall_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5)
             ax2.scatter(
-                [0 + 0.06], [overall_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+                [0], [overall_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
             )
             # value tags
             t_f = ax.text(
@@ -672,7 +670,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
             label="Control (both)",
         ),
     ]
-    plt.legend(handles=handles, loc="best")
+    plt.legend(handles=handles, loc="upper left")
 
     save_path = os.path.join(base_path, "scatter_plateau_clouds.png")
     plt.tight_layout()
@@ -974,11 +972,9 @@ def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names
         control_tries = len(control_vals)
         avg_fid = float(np.nanmean(control_vals)) * 100.0
         avg_succ = 100.0 * np.sum(np.array(control_vals) >= max_fidelity) / control_tries if control_tries > 0 else 0.0
-        # Control as blue squares on both axes (slight horizontal nudge to avoid perfect overlap)
-        ax1.scatter([0 - 0.06], [avg_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=4)
-        ax2.scatter(
-            [0 + 0.06], [avg_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=4
-        )
+        # Control as blue squares centered at x=0 on both axes
+        ax1.scatter([0], [avg_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=4)
+        ax2.scatter([0], [avg_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=4)
         # value tags
         t1 = ax1.text(
             0 + 0.1,
