@@ -523,11 +523,8 @@ def _collect_all_plateau_ids(base_path):
 def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=None, x_label: str = "Run"):
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
-    ax2 = ax.twinx()  # right axis for run averages overlay (percent)
+    ax2 = ax.twinx()  # mirror/right axis for success rate overlays
     ax.axhline(100 * max_fidelity, color="C0", linestyle="-", label=f"max_fidelity={max_fidelity}")
-    plateau_ids = _collect_all_plateau_ids(base_path)
-    cmap = plt.cm.get_cmap("tab20", max(1, len(plateau_ids)))
-    plateau_colors = {pid: cmap(i % cmap.N) for i, pid in enumerate(plateau_ids)}
 
     x_ticks, base_labels, tries_counts = [], [], []
 
@@ -535,20 +532,25 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
     control_plateau_fids = collect_fidelities_by_plateau_control(base_path)
     control_tries = sum(len(v) for v in control_plateau_fids.values()) if control_plateau_fids else 0
     if control_plateau_fids:
-        for pid, vals in control_plateau_fids.items():
+        for vals in control_plateau_fids.values():
             if not vals:
                 continue
             xs = _make_jittered_xs(0, len(vals))
-            ax.scatter(xs, [v * 100 for v in vals], color=plateau_colors.get(None, "gray"), alpha=0.7, s=18, label=None)
-        # Control overall average best fidelity as blue square with value tag
+            ax.scatter(xs, [v * 100 for v in vals], color="gray", alpha=0.7, s=18, label=None)
+        # Control overall averages: blue squares on both axes (slight nudge to avoid overlap)
         control_vals_flat = [v for lst in control_plateau_fids.values() for v in lst]
         if control_vals_flat:
             overall_fid = float(np.nanmean(control_vals_flat)) * 100.0
-            ax2.scatter(
-                [0], [overall_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+            overall_succ = 100.0 * np.sum(np.array(control_vals_flat) >= max_fidelity) / len(control_vals_flat)
+            ax.scatter(
+                [0 - 0.06], [overall_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
             )
-            t = ax2.text(
-                0 + 0.05,
+            ax2.scatter(
+                [0 + 0.06], [overall_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+            )
+            # value tags
+            t_f = ax.text(
+                0 + 0.1,
                 overall_fid,
                 f"{overall_fid:.1f}%",
                 ha="left",
@@ -558,7 +560,19 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
-            t.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+            t_f.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+            t_s = ax2.text(
+                0 + 0.1,
+                overall_succ,
+                f"{overall_succ:.1f}%",
+                ha="left",
+                va="center",
+                fontsize=10,
+                color="blue",
+                zorder=100,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
+            )
+            t_s.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
         x_ticks.append(0)
         base_labels.append("Control")
         tries_counts.append(control_tries)
@@ -566,18 +580,20 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
     for run_idx in range(1, n_runs + 1):
         plateau_fids = collect_fidelities_by_plateau_for_run(base_path, run_idx)
         tries = sum(len(v) for v in plateau_fids.values()) if plateau_fids else 0
-        for pid, vals in plateau_fids.items():
+        for vals in plateau_fids.values():
             if not vals:
                 continue
             xs = _make_jittered_xs(run_idx, len(vals), jitter=0.15)
-            ax.scatter(xs, [v * 100 for v in vals], color=plateau_colors.get(None, "gray"), alpha=0.7, s=18, label=None)
-        # Overlay run average best fidelity only (when data exists), with value tag
+            ax.scatter(xs, [v * 100 for v in vals], color="gray", alpha=0.7, s=18, label=None)
+        # Overlay run averages (when data exists): Avg Fidelity on left axis, Success on right axis
         all_vals = [v for lst in plateau_fids.values() for v in lst]
         if all_vals:
             overall_fid = float(np.nanmean(all_vals)) * 100.0
-            ax2.scatter([run_idx], [overall_fid], color="green", edgecolors="black", linewidths=0.5, s=60, zorder=5)
-            t = ax2.text(
-                run_idx + 0.05,
+            overall_succ = 100.0 * np.sum(np.array(all_vals) >= max_fidelity) / len(all_vals)
+            # Avg fidelity (green circle) + tag on left axis
+            ax.scatter([run_idx], [overall_fid], color="green", edgecolors="black", linewidths=0.5, s=60, zorder=5)
+            t = ax.text(
+                run_idx + 0.1,
                 overall_fid,
                 f"{overall_fid:.1f}%",
                 ha="left",
@@ -588,12 +604,26 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
             t.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+            # Success rate (red diamond) + tag on right axis
+            ax2.scatter([run_idx], [overall_succ], color="red", marker="D", s=55, zorder=5)
+            t2 = ax2.text(
+                run_idx + 0.1,
+                overall_succ,
+                f"{overall_succ:.1f}%",
+                ha="left",
+                va="center",
+                fontsize=10,
+                color="red",
+                zorder=100,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
+            )
+            t2.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
         x_ticks.append(run_idx)
         base_labels.append(_base_label_for_run(run_idx, run_names))
         tries_counts.append(tries)
 
     ax.set_ylabel("Best Fidelity Achieved in each Repetition (%)")
-    ax2.set_ylabel("Average Best Fidelity (%)")
+    ax2.set_ylabel("Average/Success Rate of each Run (%)")
     ax.set_xlabel(x_label, labelpad=22)
     plt.xticks(x_ticks, base_labels)
     _draw_tries_sublabels(ax, x_ticks, tries_counts, fontsize=8)
@@ -603,7 +633,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
     ax2.set_ylim(0, 105)
     ax.grid(True, alpha=0.3)
 
-    # Legend: threshold + example repetition marker + run avg fidelity + control avg fidelity
+    # Legend: threshold + example repetition marker + run averages overlays + control
     handles = [
         plt.Line2D([0], [0], color="C0", linestyle="-", label=f"Max fidelity ({int(max_fidelity * 100)}%)"),
         plt.Line2D(
@@ -623,16 +653,26 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
         plt.Line2D(
             [0],
             [0],
+            marker="D",
+            color="w",
+            markerfacecolor="red",
+            markersize=7,
+            linestyle="None",
+            label="Run Success Rate (%)",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
             marker="s",
             color="w",
             markerfacecolor="blue",
             markeredgecolor="black",
             markersize=7,
             linestyle="None",
-            label="Control Avg Best Fidelity (%)",
+            label="Control (both)",
         ),
     ]
-    plt.legend(handles=handles, loc="lower left")
+    plt.legend(handles=handles, loc="best")
 
     save_path = os.path.join(base_path, "scatter_plateau_clouds.png")
     plt.tight_layout()
