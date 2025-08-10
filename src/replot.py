@@ -22,22 +22,35 @@ from tools.plot_hub import find_if_common_initial_plateaus, generate_all_plots
 #######################################################################
 # Parameters for the replotting script
 #######################################################################
-time_stamp_to_replot = "2025-07-11__16-58-40_NEW_DATA copy"
+
 max_fidelity = 0.99
 x_label = "Ancilla Topology"
 
-run_names = [
-    "Bridge",
-    "",
-    "Total",
-    "Bridge No1Q",
-    "Ansatz",
-    "Short Bridge",
-    "Disconn.",
-    "Disconn. No1Q",
-    "",
-    "Reset",
-]
+# time_stamp_to_replot = "2025-07-11__16-58-40_NEW_DATA"
+# run_names = [
+#     "Bridge",
+#     "Total",
+#     "",
+#     "Bridge No1Q",
+#     "Ansatz",
+#     "Short Bridge",
+#     "Disconn.",
+#     "Disconn. No1Q",
+#     "",
+#     "Reset",
+# ]
+
+# time_stamp_to_replot = "2025-08-06__00-23-46-Adding-ancilla-mid-run"
+# run_names = ["Bridge NoRand", "Bridge Rand", "Total NoRand", "Total Rand"]
+
+# time_stamp_to_replot = "2025-08-06__00-35-39_Fid-vs-Epochs [DONE]"
+# run_names = ["1", "3", "5", "10", "20"]
+# x_label = "Epochs"
+
+time_stamp_to_replot = "2025-08-08__01-11-23"
+x_label = "Gen - Dis steps"
+run_names = ["1-1", "2-1", "1-2", "2-2", "5-1", "1-5", "5-5", "10-10"]
+
 
 #######################################################################
 # Replotting script for the specified experiment
