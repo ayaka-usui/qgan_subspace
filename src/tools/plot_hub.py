@@ -49,11 +49,11 @@ def generate_all_plots(
         # from_scratch (and change): single merged scatter
         scatter_plot(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
     else:
-        # from_common_plateaus: now three plots (clouds, avg_fidelity, success)
+        # from_common_plateaus: now plots (clouds, avg_fidelity, success, combined, overall)
         scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
         scatter_plateau_avg_fidelity(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
         scatter_plateau_success(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
-        # Add back overall plot (two data points per run)
+        scatter_plateau_avg_success_combined(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
         scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
 
 
@@ -466,6 +466,7 @@ def scatter_plot(base_path, log_path, n_runs, max_fidelity, run_names=None, x_la
     # Legend
     handles = [
         plt.Line2D([0], [0], color="C0", linestyle="--", label=f"Max fidelity ({int(max_fidelity * 100)}%)"),
+        plt.Line2D([0], [0], color="gray", linestyle="--", label="Same plateau"),
         plt.Line2D(
             [0],
             [0],
@@ -634,6 +635,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
     # Legend: threshold + example repetition marker + run averages overlays + control
     handles = [
         plt.Line2D([0], [0], color="C0", linestyle="-", label=f"Max fidelity ({int(max_fidelity * 100)}%)"),
+        plt.Line2D([0], [0], color="gray", linestyle="--", label="Same plateau"),
         plt.Line2D(
             [0], [0], marker="o", color="w", markerfacecolor="gray", markersize=6, linestyle="None", label="Repetition"
         ),
@@ -784,6 +786,7 @@ def scatter_plateau_avg_fidelity(base_path, log_path, n_runs, max_fidelity, run_
     # Legend remains the same
     handles = [
         plt.Line2D([0], [0], color="C0", linestyle="-", label=f"Max fidelity ({int(max_fidelity * 100)}%)"),
+        plt.Line2D([0], [0], color="gray", linestyle="--", label="Same plateau"),
         plt.Line2D(
             [0],
             [0],
@@ -917,6 +920,7 @@ def scatter_plateau_success(base_path, log_path, n_runs, max_fidelity, run_names
     ax.grid(True, alpha=0.3)
 
     handles = [
+        plt.Line2D([0], [0], color="gray", linestyle="--", label="Same plateau"),
         plt.Line2D(
             [0],
             [0],
@@ -1099,6 +1103,239 @@ def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names
     ax1.legend(handles=handles, loc="best")
 
     save_path = os.path.join(base_path, "scatter_plateau_overall.png")
+    fig.tight_layout()
+    fig.savefig(save_path)
+    print_and_log(f"Saved plot to {save_path}", log_path)
+    plt.close(fig)
+
+
+def scatter_plateau_avg_success_combined(
+    base_path, log_path, n_runs, max_fidelity, run_names=None, x_label: str = "Run"
+):
+    """Combined plot: plateau avg fidelity (light green) + plateau success (light red),
+    plus overall run markers and control markers with value tags."""
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax2 = ax1.twinx()
+
+    # Fidelity threshold on left axis
+    ax1.axhline(100 * max_fidelity, color="C0", linestyle="-", label=f"max_fidelity={max_fidelity}")
+
+    # Colors
+    light_green = _pastelize("green", 0.7)
+    light_red = _pastelize("red", 0.7)
+
+    x_ticks, base_labels, tries_counts = [], [], []
+
+    # Prepare series to draw plateau lines across runs
+    plateau_ids = _collect_all_plateau_ids(base_path)
+    series_fid = {pid: {} for pid in plateau_ids}
+    series_succ = {pid: {} for pid in plateau_ids}
+
+    # Control at x=0
+    control_plateau_fids = collect_fidelities_by_plateau_control(base_path)
+    control_tries = sum(len(v) for v in control_plateau_fids.values()) if control_plateau_fids else 0
+    if control_plateau_fids:
+        fid_points = []
+        succ_points = []
+        for pid in plateau_ids:
+            vals = control_plateau_fids.get(pid, [])
+            if not vals:
+                continue
+            avg_f = float(np.nanmean(vals)) * 100.0
+            succ = 100.0 * np.sum(np.array(vals) >= max_fidelity) / len(vals)
+            series_fid[pid][0] = (
+                avg_f / 100.0
+            )  # store back in 0..1 for consistency with other funcs (then *100 on draw)
+            series_succ[pid][0] = succ
+            fid_points.append(avg_f)
+            succ_points.append(succ)
+        if fid_points:
+            xs = _make_jittered_xs(0, len(fid_points))
+            ax1.scatter(xs, fid_points, color=light_green, s=28, alpha=0.8, zorder=4)
+        if succ_points:
+            xs = _make_jittered_xs(0, len(succ_points))
+            ax2.scatter(xs, succ_points, color=light_red, s=28, alpha=0.8, zorder=4)
+        # Control overall markers
+        control_vals_flat = [v for lst in control_plateau_fids.values() for v in lst]
+        if control_vals_flat:
+            overall_fid = float(np.nanmean(control_vals_flat)) * 100.0
+            overall_succ = 100.0 * np.sum(np.array(control_vals_flat) >= max_fidelity) / len(control_vals_flat)
+            ax1.scatter(
+                [0], [overall_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+            )
+            ax2.scatter(
+                [0], [overall_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+            )
+            t1 = ax1.text(
+                0 + 0.1,
+                overall_fid,
+                f"{overall_fid:.1f}%",
+                ha="left",
+                va="center",
+                fontsize=10,
+                color="blue",
+                zorder=100,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
+            )
+            t1.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+            t2 = ax2.text(
+                0 + 0.1,
+                overall_succ,
+                f"{overall_succ:.1f}%",
+                ha="left",
+                va="center",
+                fontsize=10,
+                color="blue",
+                zorder=100,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
+            )
+            t2.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+        x_ticks.append(0)
+        base_labels.append("Control")
+        tries_counts.append(control_tries)
+
+    # Runs
+    for run_idx in range(1, n_runs + 1):
+        plateau_fids = collect_fidelities_by_plateau_for_run(base_path, run_idx)
+        tries = sum(len(v) for v in plateau_fids.values()) if plateau_fids else 0
+        fid_points = []
+        succ_points = []
+        for pid in plateau_ids:
+            vals = plateau_fids.get(pid, [])
+            if not vals:
+                continue
+            avg_f = float(np.nanmean(vals)) * 100.0
+            succ = 100.0 * np.sum(np.array(vals) >= max_fidelity) / len(vals)
+            series_fid[pid][run_idx] = avg_f / 100.0
+            series_succ[pid][run_idx] = succ
+            fid_points.append(avg_f)
+            succ_points.append(succ)
+        if fid_points:
+            xs = _make_jittered_xs(run_idx, len(fid_points))
+            ax1.scatter(xs, fid_points, color=light_green, s=28, alpha=0.8, zorder=4)
+        if succ_points:
+            xs = _make_jittered_xs(run_idx, len(succ_points))
+            ax2.scatter(xs, succ_points, color=light_red, s=28, alpha=0.8, zorder=4)
+        # Overall run markers + tags
+        all_vals = [v for lst in plateau_fids.values() for v in lst]
+        if all_vals:
+            overall_fid = float(np.nanmean(all_vals)) * 100.0
+            overall_succ = 100.0 * np.sum(np.array(all_vals) >= max_fidelity) / len(all_vals)
+            ax1.scatter([run_idx], [overall_fid], color="green", edgecolors="black", linewidths=0.5, s=60, zorder=5)
+            ax2.scatter([run_idx], [overall_succ], color="red", marker="D", s=55, zorder=5)
+            t1 = ax1.text(
+                run_idx + 0.1,
+                overall_fid,
+                f"{overall_fid:.1f}%",
+                ha="left",
+                va="center",
+                fontsize=10,
+                color="green",
+                zorder=100,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
+            )
+            t1.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+            t2 = ax2.text(
+                run_idx + 0.1,
+                overall_succ,
+                f"{overall_succ:.1f}%",
+                ha="left",
+                va="center",
+                fontsize=10,
+                color="red",
+                zorder=100,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
+            )
+            t2.set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+        x_ticks.append(run_idx)
+        base_labels.append(_base_label_for_run(run_idx, run_names))
+        tries_counts.append(tries)
+
+    # Connect plateau lines (same light colors)
+    for pid, s in series_fid.items():
+        if len(s) > 1:
+            xs = sorted(s.keys())
+            ys = [s[i] * 100.0 for i in xs]
+            ax1.plot(xs, ys, "--", color=light_green, alpha=0.5, linewidth=1, zorder=1)
+    for pid, s in series_succ.items():
+        if len(s) > 1:
+            xs = sorted(s.keys())
+            ys = [s[i] for i in xs]
+            ax2.plot(xs, ys, "--", color=light_red, alpha=0.5, linewidth=1, zorder=1)
+
+    # Labels and layout
+    ax1.set_ylabel("Average Best Fidelity (%)")
+    ax2.set_ylabel("Success Rate (%)")
+    ax1.set_xlabel(x_label, labelpad=22)
+    ax1.set_xticks(x_ticks)
+    ax1.set_xticklabels(base_labels)
+    _draw_tries_sublabels(ax1, x_ticks, tries_counts, fontsize=8)
+    fig.subplots_adjust(bottom=0.26)
+
+    ax1.set_ylim(0, 105)
+    ax2.set_ylim(0, 105)
+    ax1.grid(True, alpha=0.3)
+
+    # Legend
+    handles = [
+        plt.Line2D([0], [0], color="C0", linestyle="-", label=f"Max fidelity ({int(max_fidelity * 100)}%)"),
+        plt.Line2D([0], [0], color="gray", linestyle="--", label="Same plateau"),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor=light_green,
+            markersize=6,
+            linestyle="None",
+            label="Plateau Avg Best Fidelity (%)",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor=light_red,
+            markersize=6,
+            linestyle="None",
+            label="Plateau Success Rate (%)",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor="green",
+            markeredgecolor="black",
+            markersize=7,
+            linestyle="None",
+            label="Run Avg Best Fidelity (%)",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="D",
+            color="w",
+            markerfacecolor="red",
+            markersize=7,
+            linestyle="None",
+            label="Run Success Rate (%)",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="s",
+            color="w",
+            markerfacecolor="blue",
+            markeredgecolor="black",
+            markersize=7,
+            linestyle="None",
+            label="Control (both)",
+        ),
+    ]
+    ax1.legend(handles=handles, loc="best")
+
+    save_path = os.path.join(base_path, "scatter_plateau_avg_success_combined.png")
     fig.tight_layout()
     fig.savefig(save_path)
     print_and_log(f"Saved plot to {save_path}", log_path)
