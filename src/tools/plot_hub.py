@@ -542,12 +542,8 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
         if control_vals_flat:
             overall_fid = float(np.nanmean(control_vals_flat)) * 100.0
             overall_succ = 100.0 * np.sum(np.array(control_vals_flat) >= max_fidelity) / len(control_vals_flat)
-            ax.scatter(
-                [0], [overall_fid], color="green", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
-            )
-            ax2.scatter(
-                [0], [overall_succ], color="red", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
-            )
+            ax.scatter([0], [overall_fid], color="green", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=5)
+            ax2.scatter([0], [overall_succ], color="red", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=5)
             # value tags
             t_f = ax.text(
                 0 + 0.1,
@@ -556,7 +552,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
                 ha="left",
                 va="center",
                 fontsize=10,
-                color="green",
+                color="blue",
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
@@ -568,7 +564,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
                 ha="left",
                 va="center",
                 fontsize=10,
-                color="red",
+                color="blue",
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
@@ -665,8 +661,8 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
             [0],
             marker="s",
             color="w",
-            markerfacecolor="gray",
-            markeredgecolor="black",
+            markerfacecolor=None,
+            markeredgecolor="blue",
             markersize=7,
             linestyle="None",
             label="Control (both)",
@@ -977,8 +973,8 @@ def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names
         avg_fid = float(np.nanmean(control_vals)) * 100.0
         avg_succ = 100.0 * np.sum(np.array(control_vals) >= max_fidelity) / control_tries if control_tries > 0 else 0.0
         # Control as blue squares centered at x=0 on both axes
-        ax1.scatter([0], [avg_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=4)
-        ax2.scatter([0], [avg_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=4)
+        ax1.scatter([0], [avg_fid], color="green", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=4)
+        ax2.scatter([0], [avg_succ], color="red", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=4)
         # value tags
         t1 = ax1.text(
             0 + 0.1,
@@ -1093,8 +1089,8 @@ def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names
             [0],
             marker="s",
             color="w",
-            markerfacecolor="blue",
-            markeredgecolor="black",
+            markerfacecolor=None,
+            markeredgecolor="blue",
             markersize=7,
             linestyle="None",
             label="Control (both)",
@@ -1161,11 +1157,9 @@ def scatter_plateau_avg_success_combined(
             overall_fid = float(np.nanmean(control_vals_flat)) * 100.0
             overall_succ = 100.0 * np.sum(np.array(control_vals_flat) >= max_fidelity) / len(control_vals_flat)
             ax1.scatter(
-                [0], [overall_fid], color="green", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+                [0], [overall_fid], color="green", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=5
             )
-            ax2.scatter(
-                [0], [overall_succ], color="red", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
-            )
+            ax2.scatter([0], [overall_succ], color="red", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=5)
             t1 = ax1.text(
                 0 + 0.1,
                 overall_fid,
@@ -1173,7 +1167,7 @@ def scatter_plateau_avg_success_combined(
                 ha="left",
                 va="center",
                 fontsize=10,
-                color="green",
+                color="blue",
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
@@ -1185,7 +1179,7 @@ def scatter_plateau_avg_success_combined(
                 ha="left",
                 va="center",
                 fontsize=10,
-                color="red",
+                color="blue",
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
@@ -1326,8 +1320,8 @@ def scatter_plateau_avg_success_combined(
             [0],
             marker="s",
             color="w",
-            markerfacecolor="blue",
-            markeredgecolor="black",
+            markerfacecolor=None,
+            markeredgecolor="blue",
             markersize=7,
             linestyle="None",
             label="Control (both)",
