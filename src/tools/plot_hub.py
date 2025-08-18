@@ -466,7 +466,6 @@ def scatter_plot(base_path, log_path, n_runs, max_fidelity, run_names=None, x_la
     # Legend
     handles = [
         plt.Line2D([0], [0], color="C0", linestyle="--", label=f"Max fidelity ({int(max_fidelity * 100)}%)"),
-        plt.Line2D([0], [0], color="gray", linestyle="--", label="Same plateau"),
         plt.Line2D(
             [0],
             [0],
@@ -543,9 +542,11 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
         if control_vals_flat:
             overall_fid = float(np.nanmean(control_vals_flat)) * 100.0
             overall_succ = 100.0 * np.sum(np.array(control_vals_flat) >= max_fidelity) / len(control_vals_flat)
-            ax.scatter([0], [overall_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5)
+            ax.scatter(
+                [0], [overall_fid], color="green", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+            )
             ax2.scatter(
-                [0], [overall_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+                [0], [overall_succ], color="red", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
             )
             # value tags
             t_f = ax.text(
@@ -555,7 +556,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
                 ha="left",
                 va="center",
                 fontsize=10,
-                color="blue",
+                color="green",
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
@@ -567,7 +568,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
                 ha="left",
                 va="center",
                 fontsize=10,
-                color="blue",
+                color="red",
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
@@ -635,7 +636,6 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
     # Legend: threshold + example repetition marker + run averages overlays + control
     handles = [
         plt.Line2D([0], [0], color="C0", linestyle="-", label=f"Max fidelity ({int(max_fidelity * 100)}%)"),
-        plt.Line2D([0], [0], color="gray", linestyle="--", label="Same plateau"),
         plt.Line2D(
             [0], [0], marker="o", color="w", markerfacecolor="gray", markersize=6, linestyle="None", label="Repetition"
         ),
@@ -665,7 +665,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
             [0],
             marker="s",
             color="w",
-            markerfacecolor="blue",
+            markerfacecolor="gray",
             markeredgecolor="black",
             markersize=7,
             linestyle="None",
@@ -1161,10 +1161,10 @@ def scatter_plateau_avg_success_combined(
             overall_fid = float(np.nanmean(control_vals_flat)) * 100.0
             overall_succ = 100.0 * np.sum(np.array(control_vals_flat) >= max_fidelity) / len(control_vals_flat)
             ax1.scatter(
-                [0], [overall_fid], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+                [0], [overall_fid], color="green", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
             )
             ax2.scatter(
-                [0], [overall_succ], color="blue", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
+                [0], [overall_succ], color="red", marker="s", edgecolors="black", linewidths=0.5, s=60, zorder=5
             )
             t1 = ax1.text(
                 0 + 0.1,
@@ -1173,7 +1173,7 @@ def scatter_plateau_avg_success_combined(
                 ha="left",
                 va="center",
                 fontsize=10,
-                color="blue",
+                color="green",
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
@@ -1185,7 +1185,7 @@ def scatter_plateau_avg_success_combined(
                 ha="left",
                 va="center",
                 fontsize=10,
-                color="blue",
+                color="red",
                 zorder=100,
                 bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.6},
             )
