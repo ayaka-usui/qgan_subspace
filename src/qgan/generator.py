@@ -359,6 +359,10 @@ class Ansatz:
                     qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
                     for gate in entg_list:
                         qc.add_gate(QuantumGate(gate, qubit_to_connect_to, size, angle=0))
+                if CFG.ancilla_topology == "fake" and size > 2:
+                    qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
+                    for gate in entg_list:
+                        qc.add_gate(QuantumGate(gate, 0, qubit_to_connect_to, angle=0))
 
         return Ansatz.randomize_gates_in_qc(qc, size)
 
@@ -401,7 +405,9 @@ class Ansatz:
                 if CFG.ancilla_topology in ["bridge", "ansatz"]:
                     qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
                     qc.add_gate(QuantumGate("ZZ", qubit_to_connect_to, size, angle=0))
-
+                if CFG.ancilla_topology == "fake" and size > 2:
+                    qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
+                    qc.add_gate(QuantumGate("ZZ", 0, qubit_to_connect_to, angle=0))
         return Ansatz.randomize_gates_in_qc(qc, size)
 
     @staticmethod

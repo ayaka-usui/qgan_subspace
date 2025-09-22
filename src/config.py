@@ -177,7 +177,7 @@ class Config:
         self.extra_ancilla: bool = False
         self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "pass"
         self.ancilla_project_norm: Optional[Literal["re-norm", "pass"]] = "re-norm"
-        self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total"]] = "bridge"
+        self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "bridge"
         self.ancilla_connect_to: Optional[int] = None  # None means connected to last one, otherwise to the specified.
         self.do_ancilla_1q_gates: bool = False  # Whether to include 1-qubit gates for ancilla qubit.
         self.start_ancilla_gates_randomly: bool = True  # Whether to start ancilla gates with random angles.
