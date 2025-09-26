@@ -54,8 +54,8 @@ class Config:
         self.run_multiple_experiments: bool = True
         self.common_initial_plateaus: bool = True
         # If common_initial_plateaus == true:
-        self.N_initial_plateaus: int = 20
-        self.N_reps_each_init_plateau: int = 15
+        self.N_initial_plateaus: int = 100
+        self.N_reps_each_init_plateau: int = 1
         # If common_initial_plateaus == false:
         self.N_reps_if_from_scratch: int = 50
 
@@ -63,7 +63,7 @@ class Config:
             {
                 "extra_ancilla": True,
                 "ancilla_mode": "pass",
-                "ancilla_topology": "total",
+                "ancilla_topology": "bridge",
                 "ancilla_connect_to": None,
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": False,
@@ -72,6 +72,14 @@ class Config:
                 "extra_ancilla": True,
                 "ancilla_mode": "pass",
                 "ancilla_topology": "bridge",
+                "ancilla_connect_to": None,
+                "do_ancilla_1q_gates": True,
+                "start_ancilla_gates_randomly": True,
+            },
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "total",
                 "ancilla_connect_to": None,
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": False,
