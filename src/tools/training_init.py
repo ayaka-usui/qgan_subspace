@@ -244,7 +244,7 @@ def _run_initial_plateaus(N_initial_plateaus: int, base_path: str):
     """
     kept = 0
     attempt = 0
-    max_fid = getattr(CFG, "max_fidelity", 0.99)
+    # max_fid = getattr(CFG, "max_fidelity", 0.99)
     while kept < N_initial_plateaus:
         attempt += 1
         # Set path for initial plateau (use attempt index for uniqueness)
@@ -258,26 +258,26 @@ def _run_initial_plateaus(N_initial_plateaus: int, base_path: str):
         Training().run()
         print_and_log(f"\nInitial Plateau Attempt {attempt} completed. Checking fidelity...\n", CFG.log_path)
         # Check final fidelity
-        fid_file = os.path.join(temp_dir, "fidelities", "log_fidelity_loss.txt")
-        if os.path.exists(fid_file):
-            try:
-                data = np.loadtxt(fid_file)
-                if data.ndim == 1:
-                    fids = data
-                else:
-                    fids = data[0] if data.shape[0] < data.shape[1] else data[:, 0]
-                max_found = np.max(fids)
-            except Exception:
-                max_found = 0
-        else:
-            max_found = 0
-        if max_found < max_fid:
-            # Keep this plateau: rename to sequential initial_plateau_X
-            os.rename(temp_dir, exp_dir)
-            kept += 1
-        else:
-            # Remove this experiment
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        # fid_file = os.path.join(temp_dir, "fidelities", "log_fidelity_loss.txt")
+        # if os.path.exists(fid_file):
+        #     try:
+        #         data = np.loadtxt(fid_file)
+        # if data.ndim == 1:
+        #     fids = data
+        # else:
+        #     fids = data[0] if data.shape[0] < data.shape[1] else data[:, 0]
+        # max_found = np.max(fids)
+        # except Exception:
+        #     max_found = 0
+        # else:
+        #     max_found = 0
+        # if max_found < max_fid:
+        #     # Keep this plateau: rename to sequential initial_plateau_X
+        os.rename(temp_dir, exp_dir)
+        kept += 1
+        # else:
+        #     # Remove this experiment
+        #     shutil.rmtree(temp_dir, ignore_errors=True)
 
     # Set the base path to the root directory of the initial plateaus
     CFG.base_data_path = base_path
