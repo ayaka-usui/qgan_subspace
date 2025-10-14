@@ -54,16 +54,16 @@ class Config:
         self.run_multiple_experiments: bool = True
         self.common_initial_plateaus: bool = True
         # If common_initial_plateaus == true:
-        self.N_initial_plateaus: int = 20
-        self.N_reps_each_init_plateau: int = 15
+        self.N_initial_plateaus: int = 100
+        self.N_reps_each_init_plateau: int = 1
         # If common_initial_plateaus == false:
-        self.N_reps_if_from_scratch: int = 50
+        self.N_reps_if_from_scratch: int = 100
 
         self.reps_new_config: list[dict[str, Any]] = [
             {
                 "extra_ancilla": True,
                 "ancilla_mode": "pass",
-                "ancilla_topology": "total",
+                "ancilla_topology": "ansatz",
                 "ancilla_connect_to": None,
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": False,
@@ -72,8 +72,16 @@ class Config:
                 "extra_ancilla": True,
                 "ancilla_mode": "pass",
                 "ancilla_topology": "bridge",
-                "ancilla_connect_to": None,
+                "ancilla_connect_to": 1,
                 "do_ancilla_1q_gates": True,
+                "start_ancilla_gates_randomly": False,
+            },
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "bridge",
+                "ancilla_connect_to": None,
+                "do_ancilla_1q_gates": False,
                 "start_ancilla_gates_randomly": False,
             },
             # {"extra_ancilla": True, "ancilla_topology": "bridge", "target_hamiltonian": "ising_h"},
@@ -97,9 +105,7 @@ class Config:
         #   - warm_start_strength: Strength of warm start for generator (only if loading).
         #
         #############################################################################################
-        self.load_timestamp: Optional[str] = (
-            "2025-07-11__16-58-40_NEW_DATA_FILTERED_OPOSITE_NEW_ORDER"  # "2025-07-10__18-57-21"
-        )
+        self.load_timestamp: Optional[str] = "POST_TFM_DATA/2025-08-06__00-23-46-Mid-insertion-helps_NEW"  # "2025-07-10__18-57-21"
         self.type_of_warm_start: Literal["none", "all", "some"] = "none"
         self.warm_start_strength: Optional[float] = 0.1
 
@@ -179,7 +185,7 @@ class Config:
         self.ancilla_project_norm: Optional[Literal["re-norm", "pass"]] = "re-norm"
         self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "bridge"
         self.ancilla_connect_to: Optional[int] = None  # None means connected to last one, otherwise to the specified.
-        self.do_ancilla_1q_gates: bool = False  # Whether to include 1-qubit gates for ancilla qubit.
+        self.do_ancilla_1q_gates: bool = True  # Whether to include 1-qubit gates for ancilla qubit.
         self.start_ancilla_gates_randomly: bool = True  # Whether to start ancilla gates with random angles.
 
         #############################################################################################
@@ -280,9 +286,9 @@ class Config:
             f"ancilla_mode: {self.ancilla_mode},\n"
             f"ancilla_project_norm: {self.ancilla_project_norm},\n"
             f"ancilla_topology: {self.ancilla_topology},\n"
-            f"do_ancilla_1q_gates: {self.do_ancilla_1q_gates},\n"
             f"ancilla_connect_to: {self.ancilla_connect_to},\n"
-            # f"start_ancilla_gates_randomly: {self.start_ancilla_gates_randomly},\n"
+            f"do_ancilla_1q_gates: {self.do_ancilla_1q_gates},\n"
+            f"start_ancilla_gates_randomly: {self.start_ancilla_gates_randomly},\n"
             "----------------------------------------------\n"
             f"gen_layers: {self.gen_layers},\n"
             f"gen_ansatz: {self.gen_ansatz},\n"

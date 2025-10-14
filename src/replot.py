@@ -36,8 +36,20 @@ x_label = "Ancilla Topology"
 #     "Total",
 # ]
 
-time_stamp_to_replot = "Adding-ancilla-mid-run/2025-08-06__00-23-46-Helps_REORDER"
-run_names = ["Bridge NoRand", "Total NoRand", "Bridge Rand", "Total Rand"]
+time_stamp_to_replot = "POST_TFM_DATA/2025-08-06__00-23-46-Mid-insertion-helps_NEW"
+run_names = [
+    "Bridge NoRand",
+    "Total NoRand",
+    "Bridge Rand",
+    "Total Rand",
+    "Ansatz",
+    "BrideNo1Q",
+    "Short Bridge",
+    "Fake",
+    "Ansatz NoRand",
+    "Bridge Short NoRand",
+    "Bridge No1Q NoRand",
+]
 
 # time_stamp_to_replot = "2025-08-06__00-35-39_Fid-vs-Epochs [DONE]"
 # run_names = ["1", "3", "5", "10", "20"]
@@ -47,20 +59,9 @@ run_names = ["Bridge NoRand", "Total NoRand", "Bridge Rand", "Total Rand"]
 # x_label = "Gen - Dis steps"
 # run_names = ["1-1", "2-1", "1-2", "2-2", "5-1", "1-5", "5-5", "10-10"]
 
-time_stamp_to_replot = "2025-07-28__15-38-23-Diff-ancilla-topologies-from-start [DONE] [NEW]"
-x_label = "Ancilla Topology"
-run_names = [
-    "No Ancilla",
-    "Ansatz",
-    "Bridge No1Q",
-    "Short Bridge",
-    "Bridge",
-    "Total",
-    "PrjBridgeReN",
-    "PrjTotalReN",
-    "PrjBridgePass",
-    "PrjTotalPass",
-]
+# time_stamp_to_replot = "2025-07-28__15-38-23-Diff-ancilla-topologies-from-start [DONE] REORDER"
+# x_label = "Ancilla Topology"
+# run_names = ["No Ancilla", "Ansatz", "Bridge No1Q", "Short Bridge", "Bridge", "Total", "", "Fake"]
 
 # time_stamp_to_replot = "2025-07-28__18-50-22_Diff_Hs_complexity_ancilla_vs_no_ancilla-from_start [DONE] copy ising"
 # x_label = "Target Hamiltonian"
