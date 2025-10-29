@@ -164,6 +164,8 @@ class Generator:
         """
         Load generator parameters (angles) from a saved model, if compatible.
 
+        Doesn't load the respective optimizer momentum. They are reset upon loading.
+
         Supports loading when adding or removing an ancilla (one qubit difference).
 
         WARNING: Only load trusted pickle files! Untrusted files may be insecure.
@@ -235,9 +237,6 @@ class Generator:
             self.qc = deepcopy(saved_gen.qc)
             self.total_gen_state = deepcopy(saved_gen.total_gen_state)
 
-            # Load the optimizer parameters if they exist in the saved generator
-            self.optimizer = deepcopy(saved_gen.optimizer)
-
             print_and_log("Generator parameters loaded\n", CFG.log_path)
             return True
 
@@ -252,10 +251,6 @@ class Generator:
 
             # Since we can't copy the gen state, we regenerate it:
             self.total_gen_state = self.get_total_gen_state()
-
-            # Load the optimizer parameters if they exist in the saved generator
-            # self.optimizer.v = saved_gen.optimizer.v
-            # TODO: Check how to load momentum, if not exact match
 
             print_and_log("Generator parameters partially loaded (excluding ancilla difference)\n", CFG.log_path)
             return True

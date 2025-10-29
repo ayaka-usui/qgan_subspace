@@ -87,7 +87,7 @@ def run_multiple_trainings():
     ################################################################
     # Change results directory to MULTIPLE RUNS:
     ################################################################
-    base_path = f"./generated_data/MULTIPLE_RUNS/{CFG.run_timestamp}"
+    base_path = f"./generated_data/{CFG.run_timestamp}"
     CFG.base_data_path = base_path
     CFG.set_results_paths()
 
@@ -122,9 +122,7 @@ def run_multiple_trainings():
             common_initial_plateaus=CFG.common_initial_plateaus,
         )
         print_and_log("\nAll multiple training runs completed.\n", CFG.log_path)
-        print_and_log(
-            "\nAnalysis plots (recurrence vs max fidelity, averages, and success rates) generated.\n", CFG.log_path
-        )
+        print_and_log("\nAnalysis plots (recurrence vs max fidelity, averages, and success rates) generated.\n", CFG.log_path)
 
     ##############################################################
     # Handle exceptions during the training run
@@ -144,7 +142,7 @@ def run_multiple_trainings():
 
 def _check_for_previous_multiple_runs():
     # Check config compatibility
-    prev_log_path = f"./generated_data/MULTIPLE_RUNS/{CFG.load_timestamp}/initial_plateau_1/logs/log.txt"
+    prev_log_path = f"./generated_data/{CFG.load_timestamp}/initial_plateau_1/logs/log.txt"
     if not os.path.exists(prev_log_path):
         raise RuntimeError(f"Previous run log not found: {prev_log_path}")
     with open(prev_log_path, "r") as f:
@@ -165,11 +163,11 @@ def execute_from_no_common_initial_plateaus(base_path):
 
     Results are saved in experimentX/ subfolders.
 
-    If loading a previous MULTIPLE_RUNS, appends new runs after the last existing index.
+    If loading a previous multiple run, appends new runs after the last existing index.
     """
     n_reps = getattr(CFG, "N_reps_if_from_scratch", 1)
 
-    # Find the last run index if loading previous MULTIPLE_RUNS
+    # Find the last run index if loading previous multiple runs
     last_idx = 0 if CFG.load_timestamp is None else get_last_experiment_idx(base_path, common_initial_plateaus=False)
     CFG.load_timestamp = None  # Clear load_timestamp after using it
 
@@ -178,12 +176,12 @@ def execute_from_no_common_initial_plateaus(base_path):
         for key, value in config_dict.items():
             setattr(CFG, key, value)
         for rep in range(n_reps):
-            out_dir = f"{base_path}/experiment{new_run_idx}/{rep+1}"
+            out_dir = f"{base_path}/experiment{new_run_idx}/{rep + 1}"
             CFG.base_data_path = out_dir
             CFG.set_results_paths()
-            print_and_log_with_headers(f"\nExperiment {new_run_idx}, repetition {rep+1}/{n_reps}", CFG.log_path)
+            print_and_log_with_headers(f"\nExperiment {new_run_idx}, repetition {rep + 1}/{n_reps}", CFG.log_path)
             Training().run()
-            print_and_log(f"\nExperiment {new_run_idx}, repetition {rep+1} completed.\n", CFG.log_path)
+            print_and_log(f"\nExperiment {new_run_idx}, repetition {rep + 1} completed.\n", CFG.log_path)
 
 
 #############################################################################
@@ -198,13 +196,13 @@ def execute_from_common_initial_plateaus(base_path):
 
     Results are saved in initial_plateau_X/repeated_control and initial_plateau_X/repeated_changed_runX/ subfolders.
 
-    If loading a previous MULTIPLE_RUNS, appends new runs after the last existing index.
+    If loading a previous multiple runs, appends new runs after the last existing index.
     """
     # Cache loops configuration parameters
     N_initial_plateaus = getattr(CFG, "N_initial_plateaus", 1)
     N_reps_each_init_plateau = getattr(CFG, "N_reps_each_init_plateau", 1)
 
-    # Find the last run index if loading previous MULTIPLE_RUNS
+    # Find the last run index if loading previous multiple runs
     last_idx = 0 if CFG.load_timestamp is None else get_last_experiment_idx(base_path, common_initial_plateaus=True)
 
     #############################################################
@@ -248,13 +246,11 @@ def _run_initial_plateaus(N_initial_plateaus: int, base_path: str):
     while kept < N_initial_plateaus:
         attempt += 1
         # Set path for initial plateau (use attempt index for uniqueness)
-        exp_dir = f"{base_path}/initial_plateau_{kept+1}"
+        exp_dir = f"{base_path}/initial_plateau_{kept + 1}"
         temp_dir = f"{base_path}/initial_plateau_attempt_{attempt}"
         CFG.base_data_path = temp_dir
         CFG.set_results_paths()
-        print_and_log_with_headers(
-            f"\nInitial Plateau Attempt {attempt} (kept {kept+1}/{N_initial_plateaus})", CFG.log_path
-        )
+        print_and_log_with_headers(f"\nInitial Plateau Attempt {attempt} (kept {kept + 1}/{N_initial_plateaus})", CFG.log_path)
         Training().run()
         print_and_log(f"\nInitial Plateau Attempt {attempt} completed. Checking fidelity...\n", CFG.log_path)
         # Check final fidelity
@@ -285,9 +281,7 @@ def _run_initial_plateaus(N_initial_plateaus: int, base_path: str):
     print_and_log(f"\nFinished collecting {N_initial_plateaus} initial plateaus below threshold.\n", CFG.log_path)
 
 
-def _run_repeated_experiments(
-    N_initial_plateaus: int, N_reps_each_init_plateau: int, base_path: str, changed_or_control: str
-):
+def _run_repeated_experiments(N_initial_plateaus: int, N_reps_each_init_plateau: int, base_path: str, changed_or_control: str):
     # changed_or_control can now be 'control' or 'changed_runX'
     is_changed = changed_or_control.startswith("changed_run")
     run_idx = None
@@ -300,23 +294,21 @@ def _run_repeated_experiments(
 
     for i, rep in itertools.product(range(N_initial_plateaus), range(N_reps_each_init_plateau)):
         if changed_or_control == "control":
-            out_dir = f"{base_path}/initial_plateau_{i+1}/repeated_control"
+            out_dir = f"{base_path}/initial_plateau_{i + 1}/repeated_control"
         elif is_changed:
-            out_dir = f"{base_path}/initial_plateau_{i+1}/repeated_changed_run{run_idx}/{rep+1}"
+            out_dir = f"{base_path}/initial_plateau_{i + 1}/repeated_changed_run{run_idx}/{rep + 1}"
         else:
-            raise ValueError(
-                f"Invalid value for changed_or_control: {changed_or_control} (!= 'control', 'changed_runX')."
-            )
-        CFG.load_timestamp = f"MULTIPLE_RUNS/{CFG.run_timestamp}/initial_plateau_{i+1}"
+            raise ValueError(f"Invalid value for changed_or_control: {changed_or_control} (!= 'control', 'changed_runX').")
+        CFG.load_timestamp = f"{CFG.run_timestamp}/initial_plateau_{i + 1}"
         CFG.base_data_path = out_dir
         CFG.set_results_paths()
         print_and_log_with_headers(
-            f"\nRepeated Experiments {changed_or_control} {rep+1}/{N_reps_each_init_plateau} for Initial Plateau {i+1}",
+            f"\nRepeated Experiments {changed_or_control} {rep + 1}/{N_reps_each_init_plateau} for Initial Plateau {i + 1}",
             CFG.log_path,
         )
         Training().run()
         print_and_log(
-            f"\nRepeated Experiment {changed_or_control} {rep+1} for Initial Plateau {i+1} completed.\n",
+            f"\nRepeated Experiment {changed_or_control} {rep + 1} for Initial Plateau {i + 1} completed.\n",
             CFG.log_path,
         )
 
@@ -334,7 +326,9 @@ def run_test_configurations():
 
     all_passed = True
     for i, config_params in enumerate(test_configurations):
-        test_header_msg = f"\n{'=' * 60}\nRunning Test Configuration {i + 1}/{len(test_configurations)}: {config_params['label_suffix']}\n{'-' * 60}\n"
+        test_header_msg = (
+            f"\n{'=' * 60}\nRunning Test Configuration {i + 1}/{len(test_configurations)}: {config_params['label_suffix']}\n{'-' * 60}\n"
+        )
         print_and_log(test_header_msg, CFG.log_path)  # Also log to file
 
         ##############################################################
@@ -355,7 +349,9 @@ def run_test_configurations():
             ##############################################################
             training_instance = Training()
             training_instance.run()
-            success_msg = f"\n{'-' * 60}\nTest Configuration {i + 1} ({config_params['label_suffix']}) COMPLETED SUCCESSFULLY.\n{'=' * 60}\n"
+            success_msg = (
+                f"\n{'-' * 60}\nTest Configuration {i + 1} ({config_params['label_suffix']}) COMPLETED SUCCESSFULLY.\n{'=' * 60}\n"
+            )
             print_and_log(success_msg, CFG.log_path)
 
         except Exception as e:  # noqa: BLE001

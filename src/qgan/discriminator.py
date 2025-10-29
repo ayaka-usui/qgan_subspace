@@ -298,6 +298,8 @@ class Discriminator:
         """
         Load discriminator parameters (alpha, beta) from a saved model, if compatible.
 
+        Doesn't load the respective optimizer momentum. They are reset upon loading.
+
         If the saved model has one less qubit (no ancilla), load only the matching parameters.
 
         WARNING: Only load trusted pickle files! Untrusted files may be insecure.
@@ -334,9 +336,7 @@ class Discriminator:
 
         # This one could work, but it wouldn't make sense, since the discriminator would be useless, better to stop:
         if saved_dis.target_hamiltonian != self.target_hamiltonian:
-            print_and_log(
-                "ERROR: Saved discriminator model is incompatible (target hamiltonian mismatch).\n", CFG.log_path
-            )
+            print_and_log("ERROR: Saved discriminator model is incompatible (target hamiltonian mismatch).\n", CFG.log_path)
             cant_load = True
 
         if cant_load:
@@ -348,10 +348,6 @@ class Discriminator:
         if saved_dis.size == self.size:  # This size check, already takes care into ancilla match!
             self.alpha = deepcopy(saved_dis.alpha)
             self.beta = deepcopy(saved_dis.beta)
-
-            # Load the optimizer parameters if they exist in the saved generator
-            self.optimizer_phi = deepcopy(saved_dis.optimizer_phi)
-            self.optimizer_psi = deepcopy(saved_dis.optimizer_psi)
 
             print_and_log("Discriminator parameters loaded\n", CFG.log_path)
             return True
@@ -365,11 +361,6 @@ class Discriminator:
             # Load only the matching parameters
             self.alpha[:min_size] = saved_dis.alpha[:min_size].copy()
             self.beta[:min_size] = saved_dis.beta[:min_size].copy()
-
-            # Load the optimizer parameters if they exist in the saved generator
-            # self.optimizer_phi.v = saved_dis.optimizer_phi.v
-            # self.optimizer_psi.v = saved_dis.optimizer_psi.v
-            # TODO: Check how to load momentum, if not exact match
 
             print_and_log("Discriminator parameters loaded partially (one qubit difference).\n", CFG.log_path)
             return True

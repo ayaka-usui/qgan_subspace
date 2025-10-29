@@ -313,34 +313,90 @@ def collect_latest_changed_fidelities_nested_run(base_path, run_idx):
 
 
 def collect_fidelities_by_plateau_for_run(base_path, run_idx):
-    """Collect fidelities grouped by plateau for a specific run."""
-    plateau_fids = {}
+    """
+    Collect max fidelities grouped by plateau for a specific changed run (run_idx).
+
+    For each repetition folder:
+      initial_plateau_<P>/repeated_changed_run<run_idx>/<rep>/fidelities/log_fidelity_loss.txt
+
+    We combine it with the initial plateau log:
+      initial_plateau_<P>/log_fidelity_loss.txt
+
+    and take max( max(rep_fids), max(initial_fids) ) so the value reflects the
+    whole (initial + continued) trajectory. Each repetition contributes one
+    combined max value to the list for that plateau.
+    """
+    plateau_fids: dict[int, list[float]] = {}
+
     for root, dirs, files in os.walk(base_path):
-        m = re.search(rf"initial_plateau_(\d+)[/\\]repeated_changed_run{run_idx}[/\\](\d+)[/\\]fidelities$", root)
-        if m and "log_fidelity_loss.txt" in files:
-            plateau_num = int(m[1])
-            fid_loss_path = os.path.join(root, "log_fidelity_loss.txt")
-            max_fid = get_max_fidelity_from_file(fid_loss_path)
-            if max_fid is not None:
-                if plateau_num not in plateau_fids:
-                    plateau_fids[plateau_num] = []
-                plateau_fids[plateau_num].append(max_fid)
+        # We only care about directories that end with 'fidelities' and have the fidelity log
+        if not root.endswith(("fidelities", "fidelities/")):
+            continue
+        if "log_fidelity_loss.txt" not in files:
+            continue
+        # Quick filter: must contain the run marker
+        run_marker = f"repeated_changed_run{run_idx}"
+        if run_marker not in root:
+            continue
+        # Must be inside an initial_plateau_<P>
+        m_plateau = re.search(r"initial_plateau_(\d+)", root)
+        if not m_plateau:
+            continue
+        plateau_num = int(m_plateau.group(1))
+
+        rep_fid_path = os.path.join(root, "log_fidelity_loss.txt")
+        rep_max = get_max_fidelity_from_file(rep_fid_path)
+
+        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "log_fidelity_loss.txt")
+        init_max = get_max_fidelity_from_file(initial_log)
+
+        candidates = [v for v in (rep_max, init_max) if v is not None]
+        if not candidates:
+            continue
+        combined_max = max(candidates)
+        plateau_fids.setdefault(plateau_num, []).append(combined_max)
+
     return plateau_fids
 
 
 def collect_fidelities_by_plateau_control(base_path):
-    """Collect control fidelities grouped by plateau."""
-    plateau_fids = {}
+    """
+    Collect max fidelities for control repetitions grouped by plateau.
+
+    Control repetition folders:
+      initial_plateau_<P>/repeated_control/<rep>/fidelities/log_fidelity_loss.txt
+
+    Combine each control repetition with the initial plateau:
+      initial_plateau_<P>/log_fidelity_loss.txt
+
+    Store one combined max per repetition in the list for that plateau.
+    """
+    plateau_fids: dict[int, list[float]] = {}
+
     for root, dirs, files in os.walk(base_path):
-        m = re.search(r"initial_plateau_(\d+)[/\\]repeated_control[/\\]fidelities$", root)
-        if m and "log_fidelity_loss.txt" in files:
-            plateau_num = int(m[1])
-            fid_loss_path = os.path.join(root, "log_fidelity_loss.txt")
-            max_fid = get_max_fidelity_from_file(fid_loss_path)
-            if max_fid is not None:
-                if plateau_num not in plateau_fids:
-                    plateau_fids[plateau_num] = []
-                plateau_fids[plateau_num].append(max_fid)
+        if not root.endswith(("fidelities", "fidelities/")):
+            continue
+        if "log_fidelity_loss.txt" not in files:
+            continue
+        if "repeated_control" not in root:
+            continue
+        m_plateau = re.search(r"initial_plateau_(\d+)", root)
+        if not m_plateau:
+            continue
+        plateau_num = int(m_plateau.group(1))
+
+        control_fid_path = os.path.join(root, "log_fidelity_loss.txt")
+        control_max = get_max_fidelity_from_file(control_fid_path)
+
+        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "log_fidelity_loss.txt")
+        init_max = get_max_fidelity_from_file(initial_log)
+
+        candidates = [v for v in (control_max, init_max) if v is not None]
+        if not candidates:
+            continue
+        combined_max = max(candidates)
+        plateau_fids.setdefault(plateau_num, []).append(combined_max)
+
     return plateau_fids
 
 
