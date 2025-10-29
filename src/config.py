@@ -96,6 +96,9 @@ class Config:
         #       + For individual runs, it will load the models from the specified timestamp.
         #       + For multiple runs, it will move to the directory from the specified timestamp,
         #         and append the new configurations (if common init, it will first check the CFG matches).
+        #     Loads gen (thetas) and dis (alphas/betas), but not the momentum from their optimizers).
+        #     Supports loading when adding or removing an ancilla (one qubit difference).
+        #     WARNING: Only load trusted pickle files! Untrusted files may be insecure.
         #
         #   - type_of_warm_start: Warm start type for loading models (only if load_timestamp != None).
         #       + "none": No warm start.
@@ -105,7 +108,7 @@ class Config:
         #   - warm_start_strength: Strength of warm start for generator (only if loading).
         #
         #############################################################################################
-        self.load_timestamp: Optional[str] = "POST_TFM_DATA/2025-08-06__00-23-46-Mid-insertion-helps_NEW"  # "2025-07-10__18-57-21"
+        self.load_timestamp: Optional[str] = None  # "2025-07-10__18-57-21"
         self.type_of_warm_start: Literal["none", "all", "some"] = "none"
         self.warm_start_strength: Optional[float] = 0.1
 
