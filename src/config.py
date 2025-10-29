@@ -63,7 +63,7 @@ class Config:
             {
                 "extra_ancilla": True,
                 "ancilla_mode": "pass",
-                "ancilla_topology": "ansatz",
+                "ancilla_topology": "bridge",
                 "ancilla_connect_to": None,
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": False,
@@ -73,6 +73,14 @@ class Config:
                 "ancilla_mode": "pass",
                 "ancilla_topology": "bridge",
                 "ancilla_connect_to": 1,
+                "do_ancilla_1q_gates": True,
+                "start_ancilla_gates_randomly": True,
+            },
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "total",
+                "ancilla_connect_to": None,
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": False,
             },
