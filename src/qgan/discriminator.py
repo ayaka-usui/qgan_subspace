@@ -62,16 +62,28 @@ class Discriminator:
         self.ancilla_mode: str = CFG.ancilla_mode  # Topology doesn't matter, its not a circuit = fully connect matrix.
         self.target_size: int = CFG.system_size
         self.target_hamiltonian: str = CFG.target_hamiltonian
+        self.dis_type: str = CFG.dis_type
 
     def _init_params_alpha_beta(self):
-        # Each param is: (size x 4)
-        self.alpha: np.ndarray = np.zeros((self.size, len(self.herm)))
-        self.beta: np.ndarray = np.zeros((self.size, len(self.herm)))
+        if CFG.dis_type == "local":
+            # Each param is: (size x 4)
+            self.alpha: np.ndarray = np.zeros((self.size, len(self.herm)))
+            self.beta: np.ndarray = np.zeros((self.size, len(self.herm)))
 
-        # Random Discriminator Parameters
-        for i in range(self.size):
-            self.alpha[i] = -1 + 2 * np.random.random(len(self.herm))
-            self.beta[i] = -1 + 2 * np.random.random(len(self.herm))
+            # Random Discriminator Parameters
+            for i in range(self.size):
+                self.alpha[i] = -1 + 2 * np.random.random(len(self.herm))
+                self.beta[i] = -1 + 2 * np.random.random(len(self.herm))
+
+        elif CFG.dis_type == "global":
+            # Each param is: (4^size)
+            self.alpha: np.ndarray = np.zeros(4 ** (self.size))
+            self.beta: np.ndarray = np.zeros(4 ** (self.size))
+
+            # Random Discriminator Parameters
+            for i in range(4 ** (self.size)):
+                self.alpha[i] = -1 + 2 * np.random.random()
+                self.beta[i] = -1 + 2 * np.random.random()
 
     def get_psi_and_phi(self) -> np.ndarray:
         """Get matrix representation of real (psi) & imaginary (phi) part of the discriminator
@@ -87,14 +99,36 @@ class Discriminator:
         Returns:
             tuple[np.ndarray]: Tuple of Psi and Phi, matrix representations of real and imaginary part of discriminator.
         """
-        psi, phi = 1, 1
-        for i in range(self.size):
-            psi_i, phi_i = np.zeros_like(self.herm[0], dtype=complex), np.zeros_like(self.herm[0], dtype=complex)
-            for j, herm_j in enumerate(self.herm):
-                psi_i += self.alpha[i][j] * herm_j
-                phi_i += self.beta[i][j] * herm_j
-            psi, phi = np.kron(psi, psi_i), np.kron(phi, phi_i)
-        return psi, phi
+        if CFG.dis_type == "local":
+            psi, phi = 1, 1
+            for i in range(self.size):
+                psi_i, phi_i = np.zeros_like(self.herm[0], dtype=complex), np.zeros_like(self.herm[0], dtype=complex)
+                for j, herm_j in enumerate(self.herm):
+                    psi_i += self.alpha[i][j] * herm_j
+                    phi_i += self.beta[i][j] * herm_j
+                psi, phi = np.kron(psi, psi_i), np.kron(phi, phi_i)
+            return psi, phi
+
+        elif CFG.dis_type == "global":
+            psi, phi = np.zeros((2**self.size, 2**self.size), dtype=complex), np.zeros((2**self.size, 2**self.size), dtype=complex)
+            for i in range(4**self.size):
+                # Convert index to base 4 representation to get the hermitian operators for each qubit
+                indices = []
+                temp = i
+                for _ in range(self.size):
+                    indices.append(temp % 4)
+                    temp //= 4
+                indices.reverse()
+
+                # Construct the Kronecker product of the hermitian operators
+                herm_product = 1
+                for index in indices:
+                    herm_product = np.kron(herm_product, self.herm[index])
+
+                # Accumulate the contributions to psi and phi
+                psi += self.alpha[i] * herm_product
+                phi += self.beta[i] * herm_product
+            return psi, phi
 
     def get_dis_matrices_rep(self) -> tuple:
         """Computes the matrices A and B from the psi and phi matrices, scaled by the inverse of lambda.
@@ -127,20 +161,26 @@ class Discriminator:
         ####################################################
         # Update alpha
         ####################################################
-        grad_alpha = self._compute_grad(final_target_state, final_gen_state, A, B, "alpha")
+        if CFG.dis_type == "local":
+            grad_alpha = self._compute_grad_local(final_target_state, final_gen_state, A, B, "alpha")
+        elif CFG.dis_type == "global":
+            raise NotImplementedError("Global discriminator gradient computation not implemented yet.")
         new_alpha = self.optimizer_psi.move_in_grad(self.alpha, grad_alpha, "max")
 
         ####################################################
         # Update beta
         ####################################################
-        grad_beta = self._compute_grad(final_target_state, final_gen_state, A, B, "beta")
+        if CFG.dis_type == "local":
+            grad_beta = self._compute_grad_local(final_target_state, final_gen_state, A, B, "beta")
+        elif CFG.dis_type == "global":
+            raise NotImplementedError("Global discriminator gradient computation not implemented yet.")
         new_beta = self.optimizer_phi.move_in_grad(self.beta, grad_beta, "max")
 
         # Update the parameters later, to avoid affecting gradient computations:
         self.alpha = new_alpha
         self.beta = new_beta
 
-    def _compute_grad(self, final_target_state, final_gen_state, A, B, param: str) -> np.ndarray:
+    def _compute_grad_local(self, final_target_state, final_gen_state, A, B, param: str) -> np.ndarray:
         """Calculate the gradient of the discriminator with respect to the param (alpha or beta).
 
         Args:
@@ -337,6 +377,10 @@ class Discriminator:
         # This one could work, but it wouldn't make sense, since the discriminator would be useless, better to stop:
         if saved_dis.target_hamiltonian != self.target_hamiltonian:
             print_and_log("ERROR: Saved discriminator model is incompatible (target hamiltonian mismatch).\n", CFG.log_path)
+            cant_load = True
+
+        if saved_dis.dis_type != self.dis_type:
+            print_and_log("ERROR: Saved discriminator model is incompatible (discriminator type mismatch).\n", CFG.log_path)
             cant_load = True
 
         if cant_load:

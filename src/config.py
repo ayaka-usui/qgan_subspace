@@ -224,6 +224,15 @@ class Config:
         self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0]  # Strengths for the above terms.
 
         #############################################################################################
+        # -----------------------
+        # DISCRIMINATOR CONFIGURATION
+        # -----------------------
+        #   - dis_type: Discriminator locality, local or global.
+        #
+        #############################################################################################
+        self.dis_type: Literal["local", "global"] = "local"
+
+        #############################################################################################
         # -----------------------------------
         # MOMENTUM OPTIMIZATION CONFIGURATION
         # -----------------------------------
