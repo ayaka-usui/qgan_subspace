@@ -11,145 +11,99 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Target hamiltonian module"""
+"""Target hamiltonian module using PyTorch."""
 
 import sys
-
-import numpy as np
-from scipy import linalg
-
+import torch
 from config import CFG
-from tools.qobjects.qgates import I, Identity, X, Y, Z
-
+from tools.qobjects.qgates import (
+    I, Identity, X, Y, Z,
+    _construct_operator, device, COMPLEX_TYPE
+)
 
 ##############################################################
-# MAIN FUNCTIONS FOR TARGET HAMILTONIAN
+# HAMILTONIAN CUSTOM TERMS (Using the new PyTorch helper)
 ##############################################################
-def get_target_unitary(target_type: str, size: int) -> np.ndarray:
-    """Get the target unitary based on the target type and size.
 
-    Args:
-        target_type (str): Type of target Hamiltonian, either cluster_h, rotated_surface_h, ising_h, or custom_h.
-        size (int): Size of the system.
+def term_X(size, *qubits):
+    return _construct_operator(size, {q: X for q in qubits})
 
-    Returns:
-        np.ndarray: The target unitary.
-    """
-    if target_type == "cluster_h":
-        return construct_clusterH(size)
-    if target_type == "rotated_surface_h":
-        return construct_RotatedSurfaceCode(size)
-    if target_type == "ising_h":
-        return construct_ising(size)
-    if target_type == "custom_h":
-        return construct_target(size, CFG.custom_hamiltonian_terms, CFG.custom_hamiltonian_strengths)
-    raise ValueError(f"Unknown target type: {target_type}. Expected 'cluster_h', 'rotated_surface_h', or 'custom_h'.")
+def term_Y(size, *qubits):
+    return _construct_operator(size, {q: Y for q in qubits})
 
+def term_Z(size, *qubits):
+    return _construct_operator(size, {q: Z for q in qubits})
 
-def get_final_target_state(final_input_state: np.ndarray) -> np.ndarray:
-    """Initialize the target state. Applying the target unitary to the maximally entangled state.
+def term_XX(size, q1, q2):
+    return _construct_operator(size, {q1: X, q2: X})
 
-    And returns it ready to be used in the discriminator.
+def term_XZ(size, q1, q2):
+    return _construct_operator(size, {q1: X, q2: Z})
 
-    Args:
-        final_input_state (np.ndarray): the input state, which is the maximally entangled state.
+def term_ZZ(size, q1, q2):
+    return _construct_operator(size, {q1: Z, q2: Z})
 
-    Returns:
-        np.ndarray: the target state after applying the target unitary.
-    """
-    target_unitary = get_target_unitary(CFG.target_hamiltonian, CFG.system_size)
+def term_ZZZ(size, q1, q2, q3):
+    return _construct_operator(size, {q1: Z, q2: Z, q3: Z})
 
-    target_op = np.kron(Identity(CFG.system_size), target_unitary)
-    if CFG.extra_ancilla and CFG.ancilla_mode == "pass":
-        target_op = np.kron(target_op, Identity(1))
-    return np.matmul(target_op, final_input_state)
+def term_ZZZZ(size, q1, q2, q3, q4):
+    return _construct_operator(size, {q1: Z, q2: Z, q3: Z, q4: Z})
+
+def term_XZX(size, q1, q2, q3):
+    return _construct_operator(size, {q1: X, q2: Z, q3: X})
+
+def term_XXXX(size, q1, q2, q3, q4):
+    return _construct_operator(size, {q1: X, q2: X, q3: X, q4: X})
 
 
 ##################################################################
 # PREDEFINED TARGETS
 ##################################################################
 
-
-def construct_target(size: int, terms: list[str], strengths: list[float]) -> np.ndarray:
-    """Construct target Hamiltonian. Specify the terms to include as a list of strings.
-
-    Args:
-        size (int): the size of the system.
-        terms (list[str]): which terms to include, e.g. ["I", "X", "Y", "Z", "XX", "XZ", "ZZ", "ZZZ", "ZZZZ", "XZX", "XXXX"]
-        strenghs (list[float]): the strengths of the terms, in the same order as `terms`.
-
-    Returns:
-        np.ndarray: the target Hamiltonian.
-    """
-    H = np.zeros([2**size, 2**size])
-    for term_i, term in enumerate(terms):
+def construct_target(size: int, terms: list[str], strengths: list[float]) -> torch.Tensor:
+    """Construct target Hamiltonian from a list of terms and strengths."""
+    H = torch.zeros((2**size, 2**size), dtype=COMPLEX_TYPE, device=device)
+    for i, term in enumerate(terms):
+        s = strengths[i]
         if term == "I":
-            H += strengths[term_i] * np.identity(2**size)
+            H += s * torch.eye(2**size, dtype=COMPLEX_TYPE, device=device)
         elif term == "X":
-            for i in range(size):
-                H += strengths[term_i] * term_X(size, i)
+            for i in range(size): H += s * term_X(size, i)
         elif term == "Y":
-            for i in range(size):
-                H += strengths[term_i] * term_Y(size, i)
+            for i in range(size): H += s * term_Y(size, i)
         elif term == "Z":
-            for i in range(size):
-                H += strengths[term_i] * term_Z(size, i)
+            for i in range(size): H += s * term_Z(size, i)
         elif term == "XX":
-            for i in range(size - 1):
-                H += strengths[term_i] * term_XX(size, i, i + 1)
+            for i in range(size-1): H += s * term_XX(size, i, i+1)
         elif term == "XZ":
-            for i in range(size - 1):
-                H += strengths[term_i] * term_XZ(size, i, i + 1)
+            for i in range(size-1): H += s * term_XZ(size, i, i+1)
         elif term == "ZZ":
-            for i in range(size - 1):
-                H += strengths[term_i] * term_ZZ(size, i, i + 1)
+            for i in range(size-1): H += s * term_ZZ(size, i, i+1)
         elif term == "ZZZ":
-            for i in range(size - 2):
-                H += strengths[term_i] * term_ZZZ(size, i, i + 1, i + 2)
+            for i in range(size-2): H += s * term_ZZZ(size, i, i+1, i+2)
         elif term == "ZZZZ":
-            for i in range(size - 3):
-                H += strengths[term_i] * term_ZZZZ(size, i, i + 1, i + 2, i + 3)
+            for i in range(size-3): H += s * term_ZZZZ(size, i, i+1, i+2, i+3)
         elif term == "XZX":
-            for i in range(size - 2):
-                H += strengths[term_i] * term_XZX(size, i, i + 1, i + 2)
+            for i in range(size-2): H += s * term_XZX(size, i, i+1, i+2)
         elif term == "XXXX":
-            for i in range(size - 3):
-                H += strengths[term_i] * term_XXXX(size, i, i + 1, i + 2, i + 3)
-        # Add more terms as needed
+            for i in range(size-3): H += s * term_XXXX(size, i, i+1, i+2, i+3)
         else:
             raise ValueError(f"Unknown term '{term}' in custom_hamiltonian_terms.")
-    return linalg.expm(-1j * H)
+    return torch.matrix_exp(-1j * H)
 
-
-def construct_clusterH(size: int) -> np.ndarray:
-    """Construct cluster Hamiltonian.
-
-    Args:
-        size (int): the size of the system.
-
-    Returns:
-        np.ndarray: the cluster Hamiltonian.
-    """
-    H = np.zeros([2**size, 2**size])
+def construct_clusterH(size: int) -> torch.Tensor:
+    """Construct cluster Hamiltonian."""
+    H = torch.zeros((2**size, 2**size), dtype=COMPLEX_TYPE, device=device)
     for i in range(size - 2):
         H += term_XZX(size, i, i + 1, i + 2)
         H += term_Z(size, i)
     H += term_Z(size, size - 2)
     H += term_Z(size, size - 1)
-    return linalg.expm(-1j * H)
+    return torch.matrix_exp(-1j * H)
 
-
-def construct_RotatedSurfaceCode(size: int) -> np.ndarray:
-    """Construct rotated surface code Hamiltonian.
-
-    Args:
-        size (int): the size of the system.
-
-    Returns:
-        np.ndarray: the rotated surface code Hamiltonian.
-    """
-    H = np.zeros([2**size, 2**size])
-
+def construct_RotatedSurfaceCode(size: int) -> torch.Tensor:
+    """Construct rotated surface code Hamiltonian."""
+    H = torch.zeros((2**size, 2**size), dtype=COMPLEX_TYPE, device=device)
     if size == 4:
         H += -term_XXXX(size, 0, 1, 2, 3)
         H += -term_ZZ(size, 0, 1)
@@ -165,125 +119,43 @@ def construct_RotatedSurfaceCode(size: int) -> np.ndarray:
         H += -term_ZZ(size, 7, 8)
     else:
         sys.exit("system size is not 2*2 or 3*3 either")
+    return torch.matrix_exp(-1j * H)
 
-    return linalg.expm(-1j * H)
-
-
-def construct_ising(size):
+def construct_ising(size: int) -> torch.Tensor:
     """Construct Ising Hamiltonian."""
-    H = np.zeros([2**size, 2**size])
-
+    H = torch.zeros((2**size, 2**size), dtype=COMPLEX_TYPE, device=device)
     for i in range(size - 1):
         H += -term_ZZ(size, i, i + 1)
         H += -term_X(size, i)
     H += -term_X(size, size - 1)
-
-    return linalg.expm(-1j * H)
+    return torch.matrix_exp(-1j * H)
 
 
 ##############################################################
-# HAMILTONIAN CUSTOM TERMS
+# MAIN FUNCTIONS FOR TARGET HAMILTONIAN
 ##############################################################
-def term_XXXX(size: int, qubit1: int, qubit2: int, qubit3: int, qubit4: int) -> np.ndarray:
-    """Construct a term for the Hamiltonian with four X gates acting on specified qubits."""
-    matrix = 1
-    for i in range(size):
-        if (qubit1 == i) or (qubit2 == i) or (qubit3 == i) or (qubit4 == i):
-            matrix = np.kron(matrix, X)
-        else:
-            matrix = np.kron(matrix, I)
-    return matrix
 
+def get_target_unitary(target_type: str, config = CFG) -> torch.Tensor:
+    """Get the target unitary based on the target type and size."""
+    if target_type == "cluster_h":
+        return construct_clusterH(config.system_size)
+    if target_type == "rotated_surface_h":
+        return construct_RotatedSurfaceCode(config.system_size)
+    if target_type == "ising_h":
+        return construct_ising(config.system_size)
+    if target_type == "custom_h":
+        return construct_target(config.system_size, config.custom_hamiltonian_terms, config.custom_hamiltonian_strengths)
+    raise ValueError(f"Unknown target type: {target_type}. Expected 'cluster_h', 'rotated_surface_h', or 'custom_h'.")
 
-def term_ZZZZ(size: int, qubit1: int, qubit2: int, qubit3: int, qubit4: int) -> np.ndarray:
-    """Construct a term for the Hamiltonian with four Z gates acting on specified qubits"""
-    matrix = 1
-    for i in range(size):
-        if (qubit1 == i) or (qubit2 == i) or (qubit3 == i) or (qubit4 == i):
-            matrix = np.kron(matrix, Z)
-        else:
-            matrix = np.kron(matrix, I)
-    return matrix
+def get_final_target_state(final_input_state: torch.Tensor, config = CFG) -> torch.Tensor:
+    """Initialize the target state by applying the target unitary."""
+    target_unitary = get_target_unitary(config.target_hamiltonian, config)
 
+    # Ensure the unitary is on the same device as the input state
+    target_unitary = target_unitary.to(final_input_state.device)
 
-def term_ZZZ(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.ndarray:
-    """Construct a term for the Hamiltonian with three Z gates acting on specified qubits."""
-    matrix = 1
-    for i in range(size):
-        if (qubit1 == i) or (qubit2 == i) or (qubit3 == i):
-            matrix = np.kron(matrix, Z)
-        else:
-            matrix = np.kron(matrix, I)
-    return matrix
-
-
-def term_XZX(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.ndarray:
-    """Construct a term for the Hamiltonian with X and Z gates acting on specified qubits."""
-    matrix = 1
-    for i in range(size):
-        if (qubit1 == i) or (qubit3 == i):
-            matrix = np.kron(matrix, X)
-        elif qubit2 == i:
-            matrix = np.kron(matrix, Z)
-        else:
-            matrix = np.kron(matrix, I)
-    return matrix
-
-
-def term_XX(size: int, qubit1: int, qubit2: int) -> np.ndarray:
-    """Construct a term for the Hamiltonian with two X gates acting on specified qubits."""
-    matrix = 1
-    for i in range(size):
-        if (qubit1 == i) or (qubit2 == i):
-            matrix = np.kron(matrix, X)
-        else:
-            matrix = np.kron(matrix, I)
-    return matrix
-
-
-def term_ZZ(size: int, qubit1: int, qubit2: int) -> np.ndarray:
-    """Construct a term for the Hamiltonian with two Z gates acting on specified qubits."""
-    matrix = 1
-    for i in range(size):
-        if (qubit1 == i) or (qubit2 == i):
-            matrix = np.kron(matrix, Z)
-        else:
-            matrix = np.kron(matrix, I)
-    return matrix
-
-
-def term_XZ(size, qubit1, qubit2):
-    """Construct a term for the Hamiltonian with an X gate on one qubit and a Z gate on another."""
-    matrix = 1
-    for i in range(size):
-        if qubit1 == i:
-            matrix = np.kron(matrix, X)
-        elif qubit2 == i:
-            matrix = np.kron(matrix, Z)
-        else:
-            matrix = np.kron(matrix, I)
-    return matrix
-
-
-def term_Z(size: int, qubit1: int) -> np.ndarray:
-    """Construct a term for the Hamiltonian with a single Z gate acting on a specified qubit."""
-    matrix = 1
-    for i in range(size):
-        matrix = np.kron(matrix, Z) if qubit1 == i else np.kron(matrix, I)
-    return matrix
-
-
-def term_X(size, qubit1):
-    """Construct a term for the Hamiltonian with a single X gate acting on a specified qubit."""
-    matrix = 1
-    for i in range(size):
-        matrix = np.kron(matrix, X) if qubit1 == i else np.kron(matrix, I)
-    return matrix
-
-
-def term_Y(size, qubit1):
-    """Construct a term for the Hamiltonian with a single Y gate acting on a specified qubit."""
-    matrix = 1
-    for i in range(size):
-        matrix = np.kron(matrix, Y) if qubit1 == i else np.kron(matrix, I)
-    return matrix
+    target_op = torch.kron(Identity(config.system_size), target_unitary)
+    if config.extra_ancilla and config.ancilla_mode == "pass":
+        target_op = torch.kron(target_op, Identity(1))
+        
+    return torch.matmul(target_op, final_input_state)

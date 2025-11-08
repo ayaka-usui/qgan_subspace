@@ -3,8 +3,10 @@
 
 # Generated files
 generated_data/
+previous_data/
 *data/
 *log*
 *cache*
 .DS_Store
 tests/qgan/data/
+src/cluster_data/

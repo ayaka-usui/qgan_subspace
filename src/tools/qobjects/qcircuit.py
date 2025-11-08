@@ -11,89 +11,58 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""definition of quantum circuit simulation."""
+"""Definition of a quantum circuit as a PyTorch Module."""
 
-import os
-
-import numpy as np
-
+import torch
+import torch.nn as nn
 from tools.qobjects.qgates import Identity, QuantumGate
 
-
-class QuantumCircuit:
-    def __init__(self, size, name):
+class QuantumCircuit(nn.Module):
+    """
+    Represents a quantum circuit as a sequence of gates.
+    Inherits from torch.nn.Module to handle trainable parameters and device placement.
+    """
+    def __init__(self, size: int):
+        super().__init__()
         self.size = size
-        self.depth = 0
-        self.gates = []
-        self.name = name
+        # Use ModuleList to ensure parameters of gates are registered
+        self.gates = nn.ModuleList()
+
+    def add_gate(self, quantum_gate: QuantumGate):
+        """Adds a gate to the circuit."""
+        self.gates.append(quantum_gate)
+
+    def forward(self) -> torch.Tensor:
+        """
+        Calculates the matrix representation of the entire circuit.
+        This is the forward pass of the model.
+        """
+        # Determine the device from the model's parameters. This ensures that
+        # new tensors are created on the same device the model is on.
+        # We check if there are any gates first to avoid errors on empty circuits.
+        if self.gates:
+            device = next(self.parameters()).device
+        else:
+            # Fallback for an empty circuit, can be cpu or a globally defined device
+            from .qgates import device as default_device
+            device = default_device
+
+        # Start with the identity matrix for the total number of qubits, on the correct device.
+        matrix = Identity(self.size).to(device)
+
+        # Apply each gate in sequence
+        for gate in self.gates:
+            # Get the matrix for the current gate
+            g = gate(self.size)
+            # Left-multiply the gate to the total circuit matrix
+            matrix = torch.matmul(g, matrix)
+
+        return matrix
 
     def check_circuit(self):
-        for j, gate_j in enumerate(self.gates):
-            if gate_j.qubit1 is not None and gate_j.qubit2 is not None:
-                if gate_j.qubit1 > self.size - 1:
-                    print(f"Error: #{j} gate:{gate_j.name} 1qubit is out of range")
-                    os._exit(0)
-                elif gate_j.qubit2 > self.size - 1:
-                    print(f"Error: #{j} gate:{gate_j.name} 2qubit is out of range")
-                    os._exit(0)
-
-    def get_mat_rep(self):
-        matrix = Identity(self.size)
-        for gate in self.gates:
-            g = gate.matrix_representation(self.size, False)
-            matrix = np.matmul(g, matrix)
-        return np.asmatrix(matrix)
-
-    def get_grad_mat_rep(self, index, signal="none", type="matrix_multiplication") -> np.ndarray:
-        """Matrix multipliction: explicit way to calculate the gradient using matrix multiplication.
-
-        Shift_phase: generate two quantum circuit to calculate the gradient evaluating analytic gradients on quantum hardware:
-        https://arxiv.org/pdf/1811.11184.pdf
-        """
-        if type == "shift_phase":
-            matrix = Identity(self.size)
-            for j, gate_j in enumerate(self.gates):
-                if index == j:
-                    g = gate_j.matrix_representation_shift_phase(self.size, True, signal)
-                else:
-                    g = gate_j.matrix_representation_shift_phase(self.size, False, signal)
-                matrix = np.matmul(g, matrix)
-            return np.asmatrix(matrix)
-
-        if type == "matrix_multiplication":
-            matrix = Identity(self.size)
-            for j, gate_j in enumerate(self.gates):
-                if index == j:
-                    g = gate_j.matrix_representation(self.size, True)
-                else:
-                    g = gate_j.matrix_representation(self.size, False)
-                matrix = np.matmul(g, matrix)
-            return np.asmatrix(matrix)
-
-        return None
-
-    def get_grad_qc(self, indx, type="0"):
-        qc_list = []
-        for j, gate_j in enumerate(self.gates):
-            tmp = QuantumGate(" ", qubit1=None, qubit2=None, angle=None)
-            tmp.name = gate_j.name
-            tmp.qubit1 = gate_j.qubit1
-            tmp.qubit2 = gate_j.qubit2
-            tmp.angle = gate_j.angle
-            if j == indx:
-                try:
-                    if gate_j.name != "G" or gate_j.name != "CNOT":
-                        if type == "+":
-                            tmp.angle = gate_j.angle + gate_j.s
-                        elif type == "-":
-                            tmp.angle = gate_j.angle - gate_j.s
-                except:
-                    print("param value error")
-                qc_list.append(tmp)
-            else:
-                qc_list.append(tmp)
-        return qc_list
-
-    def add_gate(self, quantum_gate):
-        self.depth += 1
-        self.gates.append(quantum_gate)
+        """Validates that gate qubits are within the circuit size."""
+        for i, gate in enumerate(self.gates):
+            if gate.qubit1 is not None and gate.qubit1 >= self.size:
+                raise IndexError(f"Error: Gate #{i} ({gate.name}) has qubit1 out of range.")
+            if gate.qubit2 is not None and gate.qubit2 >= self.size:
+                raise IndexError(f"Error: Gate #{i} ({gate.name}) has qubit2 out of range.")

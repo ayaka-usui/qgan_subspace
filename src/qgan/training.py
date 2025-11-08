@@ -11,136 +11,129 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Training module for the Quantum GAN"""
+"""Training module for the Quantum GAN using PyTorch."""
 
-from datetime import datetime
-
+import torch
 import numpy as np
-
 from config import CFG
-from qgan.ancilla import (
-    get_final_gen_state_for_discriminator,
-    get_max_entangled_state_with_ancilla_if_needed,
-)
-from qgan.cost_functions import compute_fidelity_and_cost
+from qgan.ancilla import get_final_gen_state_for_discriminator, get_max_entangled_state_with_ancilla_if_needed
+from qgan.cost_functions import compute_fidelity_and_cost, compute_cost
 from qgan.discriminator import Discriminator
 from qgan.generator import Generator
 from qgan.target import get_final_target_state
-from tools.data.data_managers import (
-    print_and_log,
-    save_fidelity_loss,
-    save_gen_final_params,
-    save_model,
-)
-from tools.data.loading_helpers import load_models_if_specified
+from tools.data.data_managers import print_and_log, save_fidelity_loss
 from tools.plot_hub import plt_fidelity_vs_iter
+from tools.qobjects.qgates import device # Import the configured device
+from time import perf_counter as tpc
+from dataclasses import dataclass
+from typing import Optional, List
 
-np.random.seed()
+# Set PyTorch seed for reproducibility
+#torch.manual_seed(42)
+
+@dataclass
+class Results:
+    fidelities: List
+    losses: List
+    runtimes: List
+    total_time: float
 
 
 class Training:
-    def __init__(self):
-        """Builds the configuration for the Training. You might wanna comment/discomment lines, for changing the model."""
+    """
+    Manages the training process for the Quantum GAN using PyTorch.
+    """
+    def __init__(self, config=CFG):
+        self.config = config
+        # --- 1. Initialize models and data ---
+        # The ancilla and target functions now return tensors on the correct device
+        initial_state_total, initial_state_final = get_max_entangled_state_with_ancilla_if_needed(self.config)
+        self.final_target_state: torch.Tensor = get_final_target_state(initial_state_final, self.config)
+        
+        # Instantiate the PyTorch models
+        self.gen = Generator(config=self.config).to(device)
+        self.dis = Discriminator(config=self.config).to(device)
+        
+        self.initial_state_total = initial_state_total.to(device)
+        self.final_target_state = self.final_target_state.to(device)
 
-        initial_state_total, initial_state_final = get_max_entangled_state_with_ancilla_if_needed(CFG.system_size)
-        """Preparation of max. entgl. state with ancilla qubit if needed, to generate state."""
-
-        self.final_target_state: np.matrix = get_final_target_state(initial_state_final)
-        """Prepare the target state to compare in the Dis, with the size and Target unitary defined in config."""
-
-        self.gen: Generator = Generator(initial_state_total)
-        """Prepares the Generator with the size, ansatz, layers and ancilla, defined in config."""
-
-        self.dis: Discriminator = Discriminator()
-        """Prepares the Discriminatos, with the size, and ancilla defined in config."""
+        # --- 2. Initialize Optimizers ---
+        # Use a standard PyTorch optimizer like Adam
+        self.optimizer_gen = torch.optim.SGD(self.gen.parameters(), lr=self.config.l_rate, momentum=self.config.momentum_coeff)
+        self.optimizer_dis = torch.optim.SGD(self.dis.parameters(), lr=self.config.l_rate, momentum=self.config.momentum_coeff)
 
     def run(self):
-        """Run the training, saving the data, the model, the logs, and the results plots."""
+        """Runs the entire QGAN training loop."""
+        print_and_log("\n" + self.config.show_data(), self.config.log_path)
+        
+        # Note: Model loading logic would need to be adapted to use `load_state_dict`
+        # For simplicity in this migration, we are starting from scratch.
+        # load_models_if_specified(self) 
 
-        ###########################################################
-        # Initialize training
-        ###########################################################
-        print_and_log("\n" + CFG.show_data(), CFG.log_path)
+        fidelities_history, losses_history, runtimes_history = [], [], []
+        starttime = tpc()
+        
+        for epoch in range(1, self.config.epochs + 1):
+            epoch_fidelities, epoch_losses, epoch_runtimes = [], [], []
+            for i in range(self.config.iterations_epoch):
+                # --- Train Discriminator ---
+                # We need to detach the generator's output from the computation graph
+                # when training the discriminator to avoid backpropagating through the generator.
+                
+                t0 = tpc()
+                # --- Train Generator ---
+                for _ in range(self.config.steps_gen):
+                    self.optimizer_gen.zero_grad()
+                    # Now, we use the generator's output directly to build the graph
+                    total_gen_state = self.gen(self.initial_state_total)
+                    final_gen_state = get_final_gen_state_for_discriminator(total_gen_state)
+                    # The generator aims to minimize the cost function
+                    gen_loss = compute_cost(self.dis, self.final_target_state, final_gen_state)
+                    gen_loss.backward()
+                    self.optimizer_gen.step()
 
-        # Load models if specified (only the params, and only if compatible)
-        load_models_if_specified(self)
+                with torch.no_grad():
+                    total_gen_state = self.gen(self.initial_state_total)
+                final_gen_state_detached = get_final_gen_state_for_discriminator(total_gen_state)
 
-        fidelities_history, losses_history = [], []
-        starttime = datetime.now()
-        num_epochs: int = 0
+                for _ in range(self.config.steps_dis):
+                    self.optimizer_dis.zero_grad()
+                    # The cost function for the discriminator aims to maximize the distance,
+                    # so we multiply by -1 to perform gradient descent (minimization).
+                    dis_loss = -1 * compute_cost(self.dis, self.final_target_state, final_gen_state_detached)
+                    dis_loss.backward()
+                    self.optimizer_dis.step()
+                tf = tpc()
+                # --- Logging and Monitoring ---
+                if i % self.config.save_fid_and_loss_every_x_iter == 0:
+                    # Use the detached state for fidelity/loss calculation to save memory
+                    fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, final_gen_state_detached)
+                    epoch_fidelities.append(fid)
+                    epoch_losses.append(loss.item()) # .item() gets the float value
+                    epoch_runtimes.append(tf-t0)
+                    if i % self.config.log_every_x_iter == 0:
+                        info = f"\nEpoch: {epoch:4d} | Iter: {i+1:4d} | Fidelity: {fid:8f} | Loss: {loss.item():8f}"
+                        print_and_log(info, self.config.log_path)
+            
+            # --- Store and Plot Epoch History ---
+            fidelities_history.extend(epoch_fidelities)
+            losses_history.extend(epoch_losses)
+            runtimes_history.extend(epoch_runtimes)
+            plt_fidelity_vs_iter(np.array(fidelities_history), np.array(losses_history), CFG, epoch)
 
-        ###########################################################
-        # Main Training Block
-        ###########################################################
-        while True:
-            # while (f < 0.95):
-            fidelities = []
-            losses = []
-            num_epochs += 1
-            for epoch_iter in range(CFG.iterations_epoch):
-                ###########################################################
-                # Gen and Dis gradient descent
-                ###########################################################
-                for _ in range(CFG.steps_gen):
-                    self.gen.update_gen(self.dis, self.final_target_state)
-
-                # Remove ancilla if needed, with ancilla mode, before discriminator:
-                final_gen_state = get_final_gen_state_for_discriminator(self.gen.total_gen_state)
-
-                for _ in range(CFG.steps_dis):
-                    self.dis.update_dis(self.final_target_state, final_gen_state)
-
-                ###########################################################
-                # Every X iterations: compute and save fidelity & loss
-                ###########################################################
-                if epoch_iter % CFG.save_fid_and_loss_every_x_iter == 0:
-                    fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, final_gen_state)
-                    fidelities.append(fid), losses.append(loss)
-
-                ############################################################
-                # Every X iterations: Print and log fidelity and loss
-                ############################################################
-                if epoch_iter % CFG.log_every_x_iter == 0:
-                    info = "\nepoch:{:4d} | iters:{:4d} | fidelity:{:8f} | loss:{:8f}".format(
-                        num_epochs, epoch_iter + 1, round(fid, 6), round(loss, 6)
-                    )
-                    print_and_log(info, CFG.log_path)
-
-            ###########################################################
-            # End of epoch, store data and plot
-            ###########################################################
-            fidelities_history = np.append(fidelities_history, fidelities)
-            losses_history = np.append(losses_history, losses)
-            plt_fidelity_vs_iter(fidelities_history, losses_history, CFG, num_epochs)
-
-            #############################################################
-            # Stopping conditions
-            #############################################################
-            if num_epochs >= CFG.epochs:
-                print_and_log("\n==================================================\n", CFG.log_path)
-                print_and_log(f"\nThe number of epochs exceeds {CFG.epochs}.", CFG.log_path)
+            # --- Stopping Conditions ---
+            if epoch_fidelities and epoch_fidelities[-1] > self.config.max_fidelity:
+                print_and_log(f"\nFidelity threshold of {self.config.max_fidelity} reached. Stopping training.", self.config.log_path)
                 break
+        
+        # --- End of Training ---
+        print_and_log(f"\nTraining finished after {epoch} epochs.", self.config.log_path)
+        endtime = tpc()
+        print_and_log(f"\nRun took: {endtime - starttime} time.", self.config.log_path)
+        
+        # --- Save Final Results ---
+        save_fidelity_loss(np.array(fidelities_history), np.array(losses_history), self.config.fid_loss_path)
+        self.gen.save_model_params(self.config.model_gen_path)
+        self.dis.save_model_params(self.config.model_dis_path)
 
-            if fidelities[-1] > CFG.max_fidelity:  # TODO: Maybe change this cond, to use max(fidelities)?
-                print_and_log("\n==================================================\n", CFG.log_path)
-                print_and_log(
-                    f"\nThe fidelity {fidelities[-1]} exceeds the maximum {CFG.max_fidelity}.",
-                    CFG.log_path,
-                )
-                break
-
-        ###########################################################
-        # End training, save all data into files
-        ###########################################################
-        # Save data of fidelity and loss
-        save_fidelity_loss(fidelities_history, losses_history, CFG.fid_loss_path)
-
-        # Save data of the generator and the discriminator
-        save_model(self.gen, CFG.model_gen_path)
-        save_model(self.dis, CFG.model_dis_path)
-
-        # Output the parameters of the generator
-        save_gen_final_params(self.gen, CFG.gen_final_params_path)
-
-        endtime = datetime.now()
-        print_and_log(f"\nRun took: {endtime - starttime} time.", CFG.log_path)
+        return Results(fidelities=np.array(fidelities_history), losses=np.array(losses_history), runtimes=np.array(runtimes_history), total_time=endtime-starttime)

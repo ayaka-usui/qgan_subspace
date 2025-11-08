@@ -11,116 +11,104 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Ancilla post-processing tools."""
+"""Ancilla post-processing tools using PyTorch."""
 
-import numpy as np
-
+import torch
 from config import CFG
+from tools.qobjects.qgates import device, COMPLEX_TYPE
 
-
-def get_max_entangled_state_with_ancilla_if_needed(size: int) -> np.ndarray:
-    """Get the maximally entangled state for the system size (With Ancilla if needed).
-
-    Args:
-        size (int): the size of the system.
-
-    Returns:
-        tuple[np.ndarray]: the maximally entangled states, plus ancilla if needed for generation and target.
+def get_max_entangled_state_with_ancilla_if_needed(config = CFG) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    # Generate the maximally entangled state for the system size
-    state = np.zeros(2 ** (2 * size), dtype=complex)
-    dim_register = 2**size
+    Get the maximally entangled state for the system size (with Ancilla if needed).
+    Returns tensors on the configured device.
+    """
+    dim_register = 2**config.system_size
+    state = torch.zeros(dim_register * dim_register, dtype=COMPLEX_TYPE, device=device)
+    # Create the Bell state |Φ+⟩ = 1/√d * Σ |ii⟩
     for i in range(dim_register):
         state[i * dim_register + i] = 1.0
-    state /= np.sqrt(dim_register)
+    state /= (dim_register**0.5)
 
-    # Add ancilla qubit at the end, if needed
-    initial_state_with_ancilla = np.kron(state, np.array([1, 0], dtype=complex))
+    # Add ancilla qubit |0⟩ at the end, if needed
+    ancilla_state = torch.tensor([1, 0], dtype=COMPLEX_TYPE, device=device)
+    initial_state_with_ancilla = torch.kron(state, ancilla_state)
 
-    # Different conditions for gen and target:
-    initial_state_for_gen = initial_state_with_ancilla if CFG.extra_ancilla else state
-    initial_state_for_target = initial_state_with_ancilla if CFG.extra_ancilla and CFG.ancilla_mode == "pass" else state
+    # Determine the correct state for the generator and target based on config
+    initial_state_for_gen = initial_state_with_ancilla if config.extra_ancilla else state
+    initial_state_for_target = initial_state_with_ancilla if config.extra_ancilla and config.ancilla_mode == "pass" else state
 
-    return np.asmatrix(initial_state_for_gen).T, np.asmatrix(initial_state_for_target).T
+    # Return as column vectors
+    return initial_state_for_gen.view(-1, 1), initial_state_for_target.view(-1, 1)
 
 
-def project_ancilla_zero(state: np.ndarray, renormalize: bool = True) -> tuple[np.ndarray, float]:
-    """Project the last qubit onto |0> and renormalize. Assumes state is a column vector.
-
-    Args:
-        state (np.ndarray): The quantum state vector to project.
-        renormalize (bool): Whether to renormalize the projected state.
-
-    Returns:
-        np.ndarray: The projected state vector, normalized, with the ancilla qubit removed.
-        float: The probability of the ancilla being in state |0>.
+def project_ancilla_zero(state: torch.Tensor, renormalize: bool = True, config = CFG) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    state = np.asarray(state).flatten()
+    Project the last qubit of a state vector onto |0> and renormalize.
+    Assumes state is a column vector.
+    """
+    state = state.flatten()
 
-    # Remove the ancilla qubit: keep only even indices:
+    # Keep only the elements corresponding to the ancilla being in the |0> state
     projected = state[::2]
 
-    # Compute the norm of the projected state:
-    norm = np.linalg.norm(projected)
+    # Compute the norm of the projected state (probability of measuring |0>)
+    norm = torch.linalg.norm(projected)
+    prob = norm**2
 
-    if norm == 0:  # Return the system part (without ancilla) as zeros
-        return np.zeros((2 ** (CFG.system_size * 2), 1)), 0.0
+    if norm < 1e-9:  # Check for near-zero norm
+        return torch.zeros((2**(config.system_size * 2), 1), dtype=COMPLEX_TYPE, device=device), prob
 
-    # Renormalize if needed:
+    # Renormalize if specified
     if renormalize:
-        if CFG.ancilla_project_norm == "re-norm":
+        if config.ancilla_project_norm == "re-norm":
             projected = projected / norm
-        elif CFG.ancilla_project_norm != "pass":
-            raise ValueError(f"Unknown ancilla_project_norm: {CFG.ancilla_project_norm}")
+        elif config.ancilla_project_norm != "pass":
+            raise ValueError(f"Unknown ancilla_project_norm: {config.ancilla_project_norm}")
 
-    return np.asmatrix(projected.reshape(-1, 1)), norm**2
+    return projected.view(-1, 1), prob
 
 
-# TODO: Think better what to do with this function... (how to use it)
-def trace_out_ancilla(state: np.ndarray) -> np.ndarray:
-    """Trace out the last qubit and return a sampled pure state from the reduced density matrix.
-
-    Args:
-        state (np.ndarray): The quantum state vector to trace out the ancilla.
-
-    Returns:
-        np.ndarray: The sampled pure state after tracing out the ancilla.
+def trace_out_ancilla(state: torch.Tensor) -> torch.Tensor:
     """
-    # state: (2**num_qubits, 1)
-    state = np.asarray(state).flatten()
-    # Reshape to (2**(n-1), 2) for last qubit
-    state = state.reshape(-1, 2)
-    # Compute reduced density matrix by tracing out last qubit
-    rho_reduced = np.zeros((state.shape[0], state.shape[0]), dtype=complex)
-    for i in range(2):
-        rho_reduced += np.dot(state[:, i : i + 1], state[:, i : i + 1].conj().T)
-    # Sample a pure state from the reduced density matrix
-    eigvals, eigvecs = np.linalg.eigh(rho_reduced)
-    eigvals = np.maximum(eigvals, 0)
-    eigvals = eigvals / np.sum(eigvals)
-    idx = np.random.choice(len(eigvals), p=eigvals)
+    Trace out the last qubit and return a sampled pure state from the
+    reduced density matrix.
+    """
+    state = state.flatten()
+    # Reshape to (2**(n-1), 2) to separate the last qubit
+    state = state.view(-1, 2)
+
+    # Compute the reduced density matrix rho = Tr_anc( |psi⟩⟨psi| )
+    # This is equivalent to Σ_i ( psi_i * psi_i^† ) where psi_i are the columns
+    rho_reduced = torch.matmul(state, state.conj().T)
+
+    # Sample a pure state from the reduced density matrix's spectral decomposition
+    eigvals, eigvecs = torch.linalg.eigh(rho_reduced)
+    
+    # Ensure probabilities are non-negative and normalized
+    probabilities = torch.maximum(eigvals.real, torch.tensor(0.0, device=device))
+    probabilities /= torch.sum(probabilities)
+
+    # Sample an index based on the eigenvalue probabilities
+    idx = torch.multinomial(probabilities, 1).item()
     sampled_state = eigvecs[:, idx]
-    return np.asmatrix(sampled_state.reshape(-1, 1))
+
+    return sampled_state.view(-1, 1)
 
 
-def get_final_gen_state_for_discriminator(total_output_state: np.ndarray) -> np.ndarray:
-    """Modifies the gen state to be passed to the discriminator, according to ancilla_mode.
-
-    Args:
-        total_output_state (np.ndarray): The output state from the generator.
-
-    Returns:
-        np.ndarray: The final state to be passed to the discriminator.
+def get_final_gen_state_for_discriminator(total_output_state: torch.Tensor, config = CFG) -> torch.Tensor:
     """
-    total_final_state = total_output_state
-    if CFG.extra_ancilla:
-        if CFG.ancilla_mode == "pass":
-            # Pass ancilla to discriminator (current behavior)
-            return total_final_state
-        if CFG.ancilla_mode == "project":
-            projected, _ = project_ancilla_zero(total_final_state)
-            return projected
-        if CFG.ancilla_mode == "trace":
-            return trace_out_ancilla(total_final_state)
-        raise ValueError(f"Unknown ancilla_mode: {CFG.ancilla_mode}")
-    return total_final_state
+    Modifies the generator's output state to be passed to the discriminator,
+    according to the configured ancilla_mode.
+    """
+    if not config.extra_ancilla:
+        return total_output_state
+
+    if config.ancilla_mode == "pass":
+        return total_output_state
+    elif config.ancilla_mode == "project":
+        projected, _ = project_ancilla_zero(total_output_state)
+        return projected
+    elif config.ancilla_mode == "trace":
+        return trace_out_ancilla(total_output_state)
+    else:
+        raise ValueError(f"Unknown ancilla_mode: {config.ancilla_mode}")
