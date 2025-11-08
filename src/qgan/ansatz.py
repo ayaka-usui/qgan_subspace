@@ -1,18 +1,21 @@
-from config import CFG
-import pennylane as qml
-import torch.nn as nn
-import torch
 import itertools
+
 import numpy as np
+import pennylane as qml
+import torch
+import torch.nn as nn
+
+from config import CFG
 
 
+# TODO: Missing all the last updates here (since Paula moved it here, and the merge didn't include them)
 class ZZ_X_Z_circuit(nn.Module):
-    def __init__(self, config = CFG):
+    def __init__(self, config=CFG):
         super().__init__()
         self.config = config
         self.size = self.config.system_size
         self.n_qubits = 2 * self.size + (1 if self.config.extra_ancilla else 0)
-        self.layer = self.config.gen_layers 
+        self.layer = self.config.gen_layers
         self.str_device = config.device
         self.device = qml.device(self.str_device, wires=self.n_qubits)
         self.n_params = self.count_n_params()
@@ -21,7 +24,7 @@ class ZZ_X_Z_circuit(nn.Module):
 
     def count_n_params(self):
         n_params = 0
-        base_size = self.size # - 1 if self.config.extra_ancilla else self.size
+        base_size = self.size  # - 1 if self.config.extra_ancilla else self.size
 
         # 1-qubit RX and RZ
         n_params += self.size * 2
@@ -41,15 +44,15 @@ class ZZ_X_Z_circuit(nn.Module):
                 n_params += 1
 
         return n_params * self.layer
-    
+
     def circuit(self, theta, initial_state):
         qml.StatePrep(initial_state, wires=range(self.n_qubits))  # initialize custom state
         shift = self.size
         # If extra ancilla is used, different than ansatz, we reduce the size by 1,
         # to implement the ancilla logic separately.
         size = self.size
-        #if self.config.extra_ancilla:
-        #    size -= 1            
+        # if self.config.extra_ancilla:
+        #    size -= 1
 
         idx = 0
         for _ in range(self.layer):
@@ -69,7 +72,7 @@ class ZZ_X_Z_circuit(nn.Module):
 
                 # Then 2 qubit gates
             for i in range(size - 1):
-                qml.IsingZZ(-theta[idx], wires=[shift + i, shift + i+1])
+                qml.IsingZZ(-theta[idx], wires=[shift + i, shift + i + 1])
                 idx += 1
 
             # Ancilla ancilla coupling (2q) logic for: total and bridge
@@ -85,21 +88,21 @@ class ZZ_X_Z_circuit(nn.Module):
 
                 if self.config.ancilla_topology in ["bridge", "ansatz"]:
                     qubit_to_connect_to = self.config.ancilla_connect_to if self.config.ancilla_connect_to is not None else size - 1
-                    qml.IsingZZ(-theta[idx], wires = [shift + qubit_to_connect_to, shift + size])
+                    qml.IsingZZ(-theta[idx], wires=[shift + qubit_to_connect_to, shift + size])
                     idx += 1
         return qml.state()
-    
+
     def forward(self, initial_state):
         return self.qnode(self.theta, initial_state)
-    
+
 
 class XX_YY_ZZ_Z_circuit(nn.Module):
-    def __init__(self, config = CFG):
+    def __init__(self, config=CFG):
         super().__init__()
         self.config = config
         self.size = self.config.system_size
         self.n_qubits = 2 * self.size + (1 if self.config.extra_ancilla else 0)
-        self.layer = self.config.gen_layers 
+        self.layer = self.config.gen_layers
         self.str_device = config.device
         self.device = qml.device(self.str_device, wires=self.n_qubits)
         self.n_params = self.count_n_params()
@@ -136,12 +139,11 @@ class XX_YY_ZZ_Z_circuit(nn.Module):
                     for gate in entg_list:
                         n_params += 1
 
-        return n_params     
-
+        return n_params
 
     def circuit(self, theta, initial_state):
         qml.StatePrep(initial_state, wires=range(self.n_qubits))
-        size = self.size #- 1 if self.config.extra_ancilla else self.size
+        size = self.size  # - 1 if self.config.extra_ancilla else self.size
 
         idx = 0
         entg_list = ["XX", "YY", "ZZ"]
@@ -158,23 +160,23 @@ class XX_YY_ZZ_Z_circuit(nn.Module):
             # Then 2 qubit gates:
             for i, gate in itertools.product(range(size - 1), entg_list):
                 if gate == "XX":
-                    qml.IsingXX(2*theta[idx], wires=[i, i+1])
+                    qml.IsingXX(2 * theta[idx], wires=[i, i + 1])
                     idx += 1
                 elif gate == "YY":
-                    qml.IsingYY(2*theta[idx], wires=[i, i+1])
+                    qml.IsingYY(2 * theta[idx], wires=[i, i + 1])
                     idx += 1
                 elif gate == "ZZ":
-                    qml.IsingZZ(-theta[idx], wires=[i, i+1])
+                    qml.IsingZZ(-theta[idx], wires=[i, i + 1])
                     idx += 1
             # Ancilla ancilla coupling (2q) logic for: total and bridge
             if self.config.extra_ancilla:
                 if self.config.ancilla_topology == "total":
                     for i, gate in itertools.product(range(size), entg_list):
                         if gate == "XX":
-                            qml.IsingXX(2*theta[idx], wires=[i, size])
+                            qml.IsingXX(2 * theta[idx], wires=[i, size])
                             idx += 1
                         elif gate == "YY":
-                            qml.IsingYY(2*theta[idx], wires=[i, size])
+                            qml.IsingYY(2 * theta[idx], wires=[i, size])
                             idx += 1
                         elif gate == "ZZ":
                             qml.IsingZZ(-theta[idx], wires=[i, size])
@@ -182,10 +184,10 @@ class XX_YY_ZZ_Z_circuit(nn.Module):
                 if self.config.ancilla_topology == "bridge":
                     for gate in entg_list:
                         if gate == "XX":
-                            qml.IsingXX(2*theta[idx], wires=[0, size])
+                            qml.IsingXX(2 * theta[idx], wires=[0, size])
                             idx += 1
                         elif gate == "YY":
-                            qml.IsingYY(2*theta[idx], wires=[0, size])
+                            qml.IsingYY(2 * theta[idx], wires=[0, size])
                             idx += 1
                         elif gate == "ZZ":
                             qml.IsingZZ(-theta[idx], wires=[0, size])
@@ -194,10 +196,10 @@ class XX_YY_ZZ_Z_circuit(nn.Module):
                     qubit_to_connect_to = self.config.ancilla_connect_to if self.config.ancilla_connect_to is not None else size - 1
                     for gate in entg_list:
                         if gate == "XX":
-                            qml.IsingXX(2*theta[idx], wires=[qubit_to_connect_to, size])
+                            qml.IsingXX(2 * theta[idx], wires=[qubit_to_connect_to, size])
                             idx += 1
                         elif gate == "YY":
-                            qml.IsingYY(2*theta[idx], wires=[qubit_to_connect_to, size])
+                            qml.IsingYY(2 * theta[idx], wires=[qubit_to_connect_to, size])
                             idx += 1
                         elif gate == "ZZ":
                             qml.IsingZZ(-theta[idx], wires=[qubit_to_connect_to, size])
