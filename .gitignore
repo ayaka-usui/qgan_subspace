@@ -3,6 +3,7 @@
 
 # Generated files
 generated_data/
+*data/
 *log*
 *cache*
 .DS_Store

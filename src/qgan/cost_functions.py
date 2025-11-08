@@ -13,7 +13,7 @@
 # limitations under the License.
 """Cost and Fidelity Functions"""
 
-import torch 
+import torch
 
 from config import CFG
 
@@ -30,31 +30,25 @@ def compute_cost(dis, final_target_state: torch.Tensor, final_gen_state: torch.T
         float: the cost function.
     """
     A, B, psi, phi = dis.get_dis_matrices_rep()
-    
 
-    # fmt: off
+    # Calculate the terms for the cost function
     final_gen_state = final_gen_state.flatten()
     final_target_state = final_target_state.flatten()
     A_final_gen_state = A @ final_gen_state
     B_final_gen_state = B @ final_gen_state
 
-    term1 = torch.vdot(final_gen_state, A_final_gen_state)
-    term2 = torch.vdot(final_target_state, B @ final_target_state)
+    term1 = torch.vdot(final_gen_state, A_final_gen_state) * torch.vdot(final_target_state, B @ final_target_state)
 
-    term3 = torch.vdot(B_final_gen_state, final_target_state)
-    term4 = torch.vdot(final_target_state, A_final_gen_state)
+    term2 = torch.vdot(B_final_gen_state, final_target_state) * torch.vdot(final_target_state, A_final_gen_state)
 
-    term5 = torch.vdot(A_final_gen_state, final_target_state)
-    term6 = torch.vdot(final_target_state, B_final_gen_state)
+    term3 = torch.vdot(A_final_gen_state, final_target_state) * torch.vdot(final_target_state, B_final_gen_state)
 
-    term7 = torch.vdot(B_final_gen_state, final_gen_state)
-    term8 = torch.vdot(final_target_state, A @ final_target_state)
+    term4 = torch.vdot(B_final_gen_state, final_gen_state) * torch.vdot(final_target_state, A @ final_target_state)
 
     psiterm = torch.trace(torch.outer(final_target_state, final_target_state.conj()) @ psi)
     phiterm = torch.trace(torch.outer(final_gen_state, final_gen_state.conj()) @ phi)
 
-    regterm = (config.lamb / torch.e) * (config.cst1 * term1 * term2 - config.cst2 * (term3 * term4 + term5 * term6) + config.cst3 * term7 * term8)
-    # fmt: on
+    regterm = (config.lamb / torch.e) * (config.cst1 * term1 - config.cst2 * (term2 + term3) + config.cst3 * term4)
 
     # The final loss must be a real-valued scalar tensor
     loss = (psiterm - phiterm - regterm).real

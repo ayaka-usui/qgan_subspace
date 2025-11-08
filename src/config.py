@@ -54,8 +54,8 @@ class Config:
         self.run_multiple_experiments: bool = False
         self.common_initial_plateaus: bool = True
         # If common_initial_plateaus == true:
-        self.N_initial_plateaus: int = 20
-        self.N_reps_each_init_plateau: int = 5
+        self.N_initial_plateaus: int = 100
+        self.N_reps_each_init_plateau: int = 1
         # If common_initial_plateaus == false:
         self.N_reps_if_from_scratch: int = 100
 
@@ -63,18 +63,28 @@ class Config:
             {
                 "extra_ancilla": True,
                 "ancilla_mode": "pass",
-                "ancilla_topology": "disconnected",
-            },
-            {
-                "extra_ancilla": True,
-                "ancilla_mode": "pass",
                 "ancilla_topology": "ansatz",
+                "ancilla_connect_to": None,
+                "do_ancilla_1q_gates": True,
+                "start_ancilla_gates_randomly": False,
             },
             {
                 "extra_ancilla": True,
                 "ancilla_mode": "pass",
                 "ancilla_topology": "bridge",
+                "ancilla_connect_to": 1,
+                "do_ancilla_1q_gates": True,
+                "start_ancilla_gates_randomly": False,
             },
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "bridge",
+                "ancilla_connect_to": None,
+                "do_ancilla_1q_gates": False,
+                "start_ancilla_gates_randomly": False,
+            },
+            # {"extra_ancilla": True, "ancilla_topology": "bridge", "target_hamiltonian": "ising_h"},
             # Add more configs here for comparison
         ]
 
@@ -86,6 +96,9 @@ class Config:
         #       + For individual runs, it will load the models from the specified timestamp.
         #       + For multiple runs, it will move to the directory from the specified timestamp,
         #         and append the new configurations (if common init, it will first check the CFG matches).
+        #     Loads gen (thetas) and dis (alphas/betas), but not the momentum from their optimizers).
+        #     Supports loading when adding or removing an ancilla (one qubit difference).
+        #     WARNING: Only load trusted pickle files! Untrusted files may be insecure.
         #
         #   - type_of_warm_start: Warm start type for loading models (only if load_timestamp != None).
         #       + "none": No warm start.
@@ -173,7 +186,7 @@ class Config:
         self.extra_ancilla: bool = False
         self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "pass"
         self.ancilla_project_norm: Optional[Literal["re-norm", "pass"]] = "re-norm"
-        self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total"]] = "bridge"
+        self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "bridge"
         self.ancilla_connect_to: Optional[int] = None  # None means connected to last one, otherwise to the specified.
         self.do_ancilla_1q_gates: bool = True  # Whether to include 1-qubit gates for ancilla qubit.
         self.start_ancilla_gates_randomly: bool = True  # Whether to start ancilla gates with random angles.
@@ -183,7 +196,7 @@ class Config:
         # GENERATOR CONFIGURATION
         # -----------------------
         #   - device: Pennylane quantum device (default: default.qubit)
-        #   
+        #
         #   - gen_layers: Number of layers in the generator ansatz (default: ~4)
         #
         #   - gen_ansatz: Ansatz type for generator:
@@ -191,7 +204,7 @@ class Config:
         #       + "ZZ_X_Z": 2 body Z, 1 body X and 1 body Z terms.
         #
         #############################################################################################
-        self.device = 'default.qubit'
+        self.device = "default.qubit"
         self.gen_layers: int = 3  # 2, 3, 5, 10, 20 ...
         self.gen_ansatz: Literal["XX_YY_ZZ_Z", "ZZ_X_Z"] = "ZZ_X_Z"
 
