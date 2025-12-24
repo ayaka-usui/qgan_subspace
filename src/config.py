@@ -30,8 +30,8 @@ class Config:
         # ---------------------
         # RUNS CONFIGURATION
         # ---------------------
-        #       Whether to run a single or multiple experiments, and whether to just run different experiments from the start 
-        #       or starting from a common configuration find a certain number of plateaus and then
+        #       Whether to run a single or multiple experiments, and whether to just run different experiments from 
+        #       the start, or starting from a common configuration find a certain number of plateaus and then
         #       apply changes continuing the run from them (and not adding the changes for controls comparisons).
         #       Each individual experiment lasting the specified number of epochs and iterations in CFG.
         #
