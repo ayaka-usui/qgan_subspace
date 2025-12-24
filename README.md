@@ -8,7 +8,7 @@ Distributed under the MIT License. See LICENSE for more information.
 
 ## Usage
 
-This section covers how to set up a local development environment for qgan_subspace and run the tests.
+This section covers how to set up a local development environment for qgan_subspace and configure and run experiments.
 
 1. **Clone the repository**:
 
@@ -30,18 +30,18 @@ This section covers how to set up a local development environment for qgan_subsp
 
     *(Exact command can vary depending on your shell and OS.)*
 
-    Now you can run all necessary commands (run, tests, etc.) within this environment.
+    Now you can run all next necessary commands within this environment.
 
 3. **Running**:
 
     - The only file you need to edit, for changing experiments, is `config.py`.
-    - Then, after the `config.py` has been set, execute `main.py`:
+    - Then, after the configuration has been set, execute `main.py`:
 
     ```bash
     .venv/bin/python src/main.py
     ```
 
-    - If you want to replot, some `generated_data` after editing data (remove runs, etc..), edit and use `replot.py`:
+    - If you want to replot some `generated_data`, after editing data (remove runs, etc..), edit and execute `replot.py`:
 
     ```bash
     .venv/bin/python src/replot.py
