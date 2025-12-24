@@ -30,9 +30,9 @@ class Config:
         # ---------------------
         # RUNS CONFIGURATION
         # ---------------------
-        #       If activated, you will first run experiments until you reach `N_initial_plateaus` initial plateaus.
-        #       And then for each of those you would continue them `N_reps_each_init_plateau` times, adding the
-        #       specified changes and not adding the changes (controls), for then comparing the effects of the changes.
+        #       Whether to run a single or multiple experiments, and whether to just run different experiments from the start 
+        #       or starting from a common configuration find a certain number of plateaus and then
+        #       apply changes continuing the run from them (and not adding the changes for controls comparisons).
         #       Each individual experiment lasting the specified number of epochs and iterations in CFG.
         #
         #   - run_multiple_experiments: Whether to run multiple experiments.
@@ -96,7 +96,7 @@ class Config:
         #       + For individual runs, it will load the models from the specified timestamp.
         #       + For multiple runs, it will move to the directory from the specified timestamp,
         #         and append the new configurations (if common init, it will first check the CFG matches).
-        #     Loads gen (thetas) and dis (alphas/betas), but not the momentum from their optimizers).
+        #     Loads gen (thetas) and dis (alphas/betas), but not the momentum from their optimizers.
         #     Supports loading when adding or removing an ancilla (one qubit difference).
         #     WARNING: Only load trusted pickle files! Untrusted files may be insecure.
         #
