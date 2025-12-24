@@ -34,31 +34,15 @@ This section covers how to set up a local development environment for qgan_subsp
 
 3. **Running**:
 
-    - The file to execute is `main.py`, and the only file you need to edit, for changing experiments is `config.py`.
-    - For an execution, after the `config.py` has been set, run:
+    - The only file you need to edit, for changing experiments, is `config.py`.
+    - Then, after the `config.py` has been set, execute `main.py`:
 
     ```bash
     .venv/bin/python src/main.py
     ```
 
-4. **Testing**:
-
-    If you need to test anything (for development), we use pytest:
-    - There are unit test for diverse parts of the code,
-    - And also several short integration tests, whose configuration you can set at the end of `config.py` in the `test_configurations` dictionary. These integration test will output their logs, figures, etc at the `generated_data/TESTING` directory (some graphs overwrite each other).
-
-    To execute them, run:
+    - If you want to replot, some `generated_data` after editing data (remove runs, etc..), edit and use `replot.py`:
 
     ```bash
-    PYTHONPATH=src .venv/bin/pytest
+    .venv/bin/python src/replot.py
     ```
-
-    Also if you want VSCode to detect the imports from the testing module, add:
-
-    ```json
-    "python.analysis.extraPaths": [
-        "./src"
-    ],
-    ```
-
-    to your `Preferences: Open User Settings (JSON)`.
