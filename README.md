@@ -34,14 +34,14 @@ This section covers how to set up a local development environment for qgan_subsp
 
 3. **Running**:
 
-    - The only file you need to edit, for changing experiments, is `config.py`.
-    - Then, after the configuration has been set, execute `main.py`:
+    - The only file you need to edit, for changing experiments, is `src/config.py`.
+    - Then, after the configuration has been set, execute `src/main.py`:
 
         ```bash
         .venv/bin/python src/main.py
         ```
 
-    - If you want to replot some `generated_data`, after editing data (remove runs, etc..), edit and execute `replot.py`:
+    - If you want to replot some `generated_data`, after editing data (remove runs, etc..), edit and execute `src/replot.py`:
 
         ```bash
         .venv/bin/python src/replot.py
