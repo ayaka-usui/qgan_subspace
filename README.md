@@ -44,7 +44,7 @@ This section covers how to set up a local development environment for qgan_subsp
         .venv/bin/python src/main.py
         ```
 
-    - If you want to replot some `generated_data`, after editing data (remove runs, etc..), edit and execute `src/replot.py`:
+    - If you want to replot some data from `generated_data`, specifying the x-axis ticks and labels, edit and execute `src/replot.py`:
 
         ```bash
         .venv/bin/python src/replot.py
