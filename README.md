@@ -22,11 +22,11 @@ This section covers how to set up a local development environment for qgan_subsp
    - We maintain a list with all the needed dependencies in `requirements.txt`.
    - To create a local environment using `venv`, and install the necessary dependencies, run:
 
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate 
-    pip install -r requirements.txt   
-    ```
+        ```bash
+        python3 -m venv .venv
+        source .venv/bin/activate 
+        pip install -r requirements.txt   
+        ```
 
     *(Exact command can vary depending on your shell and OS.)*
 
@@ -37,12 +37,12 @@ This section covers how to set up a local development environment for qgan_subsp
     - The only file you need to edit, for changing experiments, is `config.py`.
     - Then, after the configuration has been set, execute `main.py`:
 
-    ```bash
-    .venv/bin/python src/main.py
-    ```
+        ```bash
+        .venv/bin/python src/main.py
+        ```
 
     - If you want to replot some `generated_data`, after editing data (remove runs, etc..), edit and execute `replot.py`:
 
-    ```bash
-    .venv/bin/python src/replot.py
-    ```
+        ```bash
+        .venv/bin/python src/replot.py
+        ```
