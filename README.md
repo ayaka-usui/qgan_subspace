@@ -34,9 +34,8 @@ This section covers how to set up a local development environment for qgan_subsp
 
 3. **Running**:
 
-    - The only file you need to edit, for changing experiments, is `src/config.py`.
-
-        *(This file also contains the documentation regarding the different QGANs you can run)*
+    - All the project configuration you need to change (to set QGAN parameters, change number of experiments, etc...) is in the initialization of the `Config` class in `src/config.py`. This is the only parameters you need to edit.
+        *(The available configuration parameters are documented there)*
 
     - Then, after the configuration has been set, execute `src/main.py`:
 
