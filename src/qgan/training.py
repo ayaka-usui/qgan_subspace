@@ -79,16 +79,16 @@ class Training:
             num_epochs += 1
             for epoch_iter in range(CFG.iterations_epoch):
                 ###########################################################
-                # Gen and Dis gradient descent
+                # Dis and Gen gradient descent
                 ###########################################################
-                for _ in range(CFG.steps_gen):
-                    self.gen.update_gen(self.dis, self.final_target_state)
-
                 # Remove ancilla if needed, with ancilla mode, before discriminator:
                 final_gen_state = get_final_gen_state_for_discriminator(self.gen.total_gen_state)
 
                 for _ in range(CFG.steps_dis):
                     self.dis.update_dis(self.final_target_state, final_gen_state)
+
+                for _ in range(CFG.steps_gen):
+                    self.gen.update_gen(self.dis, self.final_target_state)
 
                 ###########################################################
                 # Every X iterations: compute and save fidelity & loss

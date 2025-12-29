@@ -127,7 +127,7 @@ class Config:
         #
         #   - max_fidelity: Stopping criterion for fidelity (default: ~0.99)
         #
-        #   - steps_gen/dis: Discriminator and Generator update steps in each iter (1~5).
+        #   - steps_gen/dis: Discriminator (first) and Generator (second) update steps in each iter (1~5).
         #
         #############################################################################################
         self.epochs: int = 10
@@ -135,8 +135,8 @@ class Config:
         self.save_fid_and_loss_every_x_iter: int = 1
         self.log_every_x_iter: int = 10  # This needs to be a multiple of save_fid_and_loss_every_x_iter
         self.max_fidelity: float = 0.99
-        self.steps_gen: int = 1
         self.steps_dis: int = 1
+        self.steps_gen: int = 1
 
         #############################################################################################
         # ---------------------
