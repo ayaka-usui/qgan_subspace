@@ -7,4 +7,3 @@ generated_data/
 *log*
 *cache*
 .DS_Store
-tests/qgan/data/
