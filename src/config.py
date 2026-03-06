@@ -30,7 +30,7 @@ class Config:
         # ---------------------
         # RUNS CONFIGURATION
         # ---------------------
-        #       Whether to run a single or multiple experiments, and whether to just run different experiments from 
+        #       Whether to run a single or multiple experiments, and whether to just run different experiments from
         #       the start, or starting from a common configuration find a certain number of plateaus and then
         #       apply changes continuing the run from them (and not adding the changes for controls comparisons).
         #       Each individual experiment lasting the specified number of epochs and iterations in CFG.
@@ -200,10 +200,15 @@ class Config:
         #   - gen_ansatz: Ansatz type for generator:
         #       + "XX_YY_ZZ_Z": 2 body X, 2 body Y, 2 body Z and 1 body Z terms.
         #       + "ZZ_X_Z": 2 body Z, 1 body X and 1 body Z terms.
+        #       + "custom": Custom ansatz, with two qubit and single qubit interactions.
+        #
+        #   - custom_ansatz_terms: Custom Ansatz terms (only apply if gen_ansatz is "custom").
+        #       + "X", "Y", "Z", "XX", "ZZ", "YY":Available custom ansatz terms.
         #
         #############################################################################################
         self.gen_layers: int = 3  # 2, 3, 5, 10, 20 ...
-        self.gen_ansatz: Literal["XX_YY_ZZ_Z", "ZZ_X_Z"] = "ZZ_X_Z"
+        self.gen_ansatz: Literal["XX_YY_ZZ_Z", "ZZ_X_Z", "custom"] = "custom"
+        self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "X"]  # "X", "Y", "Z", "XX", "ZZ", "YY"
 
         #############################################################################################
         # ---------------------
@@ -217,6 +222,8 @@ class Config:
         #
         #   - custom_hamiltonian_terms: Custom Hamiltonian terms (only apply if target_hamiltonian is "custom_h").
         #       + "I", "X", "Y", "Z", "XX", "XZ", "ZZ", "ZZZ", "ZZZZ", "XZX", "XXXX": Available custom Hamiltonian terms.
+        #
+        #   - custom_hamiltonian_strengths: Strengths for the custom H terms (only apply if target_hamiltonian is "custom_h").
         #
         #############################################################################################
         self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "ising_h", "custom_h"] = "custom_h"

@@ -311,7 +311,61 @@ class Ansatz:
         if type_of_ansatz == "ZZ_X_Z":
             return Ansatz.construct_qcircuit_ZZ_X_Z
 
+        if type_of_ansatz == "custom":
+            return Ansatz.construct_qcircuit_custom
+
         raise ValueError("Invalid type of ansatz specified.")
+
+    @staticmethod
+    def construct_qcircuit_custom(qc: QuantumCircuit, size: int, layer: int) -> QuantumCircuit:
+        """Construct a quantum circuit with a custom ansatz of single and 2 qubit gates.
+
+        Args:
+            qc (QuantumCircuit): Quantum Circuit
+            size (int): Size of the Quantum Circuit
+            layer (int): Number of layers
+
+        Returns:
+            QuantumCircuit: Quantum Circuit with the ansatz of XYZ and FieldZ
+        """
+        # If extra ancilla is used, different than ansatz, we reduce the size by 1,
+        # to implement the ancilla logic separately.
+        if CFG.extra_ancilla:
+            size -= 1
+
+        entg_list = list({"XX", "YY", "ZZ"} & set(CFG.custom_ansatz_terms))
+        single_q_list = list({"X", "Y", "Z"} & set(CFG.custom_ansatz_terms))
+
+        for _ in range(layer):
+            # First 1 qubit gates
+            for gate, i in itertools.product(single_q_list, range(size)):
+                qc.add_gate(QuantumGate(gate, i, angle=0))
+            # 1q gates for ancilla:
+            if CFG.extra_ancilla and CFG.do_ancilla_1q_gates:
+                for gate in single_q_list:
+                    qc.add_gate(QuantumGate(gate, size, angle=0))
+
+            # Then 2 qubit gates (outer loop of diff gates, inner loop of qubits)
+            for gate, i in itertools.product(entg_list, range(size - 1)):
+                qc.add_gate(QuantumGate(gate, i, i + 1, angle=0))
+            # Ancilla ancilla coupling (2q) logic for: total and bridge
+            if CFG.extra_ancilla:
+                if CFG.ancilla_topology == "total":
+                    for gate, i in itertools.product(entg_list, range(size)):
+                        qc.add_gate(QuantumGate(gate, i, size, angle=0))
+                if CFG.ancilla_topology == "bridge":
+                    for gate in entg_list:
+                        qc.add_gate(QuantumGate(gate, 0, size, angle=0))
+                if CFG.ancilla_topology in ["bridge", "ansatz"]:
+                    qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
+                    for gate in entg_list:
+                        qc.add_gate(QuantumGate(gate, qubit_to_connect_to, size, angle=0))
+                if CFG.ancilla_topology == "fake" and size > 2:
+                    qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
+                    for gate in entg_list:
+                        qc.add_gate(QuantumGate(gate, 0, qubit_to_connect_to, angle=0))
+
+        return Ansatz.randomize_gates_in_qc(qc, size)
 
     @staticmethod
     def construct_qcircuit_XX_YY_ZZ_Z(qc: QuantumCircuit, size: int, layer: int) -> QuantumCircuit:
@@ -331,21 +385,22 @@ class Ansatz:
             size -= 1
 
         entg_list = ["XX", "YY", "ZZ"]
+
         for _ in range(layer):
             # First 1 qubit gates
             for i in range(size):
                 qc.add_gate(QuantumGate("Z", i, angle=0))
-            # Ancilla 1q gates for: total, bridge and disconnected:
+            # 1q gates for ancilla:
             if CFG.extra_ancilla and CFG.do_ancilla_1q_gates:
                 qc.add_gate(QuantumGate("Z", size, angle=0))
 
             # Then 2 qubit gates:
-            for i, gate in itertools.product(range(size - 1), entg_list):
+            for gate, i in itertools.product(entg_list, range(size - 1)):
                 qc.add_gate(QuantumGate(gate, i, i + 1, angle=0))
             # Ancilla ancilla coupling (2q) logic for: total and bridge
             if CFG.extra_ancilla:
                 if CFG.ancilla_topology == "total":
-                    for i, gate in itertools.product(range(size), entg_list):
+                    for gate, i in itertools.product(entg_list, range(size)):
                         qc.add_gate(QuantumGate(gate, i, size, angle=0))
                 if CFG.ancilla_topology == "bridge":
                     for gate in entg_list:
@@ -383,7 +438,7 @@ class Ansatz:
             for i in range(size):
                 qc.add_gate(QuantumGate("X", i, angle=0))
                 qc.add_gate(QuantumGate("Z", i, angle=0))
-            # Ancilla 1q gates for: total, bridge and disconnected:
+            # 1q gates for ancilla:
             if CFG.extra_ancilla and CFG.do_ancilla_1q_gates:
                 qc.add_gate(QuantumGate("X", size, angle=0))
                 qc.add_gate(QuantumGate("Z", size, angle=0))

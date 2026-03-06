@@ -106,6 +106,9 @@ def construct_target(size: int, terms: list[str], strengths: list[float]) -> np.
         elif term == "ZZZ":
             for i in range(size - 2):
                 H += strengths[term_i] * term_ZZZ(size, i, i + 1, i + 2)
+        elif term == "XXX":
+            for i in range(size - 2):
+                H += strengths[term_i] * term_XXX(size, i, i + 1, i + 2)
         elif term == "ZZZZ":
             for i in range(size - 3):
                 H += strengths[term_i] * term_ZZZZ(size, i, i + 1, i + 2, i + 3)
@@ -225,6 +228,17 @@ def term_XZX(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.ndarray:
             matrix = np.kron(matrix, X)
         elif qubit2 == i:
             matrix = np.kron(matrix, Z)
+        else:
+            matrix = np.kron(matrix, I)
+    return matrix
+
+
+def term_XXX(size: int, qubit1: int, qubit2: int, qubit3: int) -> np.ndarray:
+    """Construct a term for the Hamiltonian with three X gates acting on specified qubits."""
+    matrix = 1
+    for i in range(size):
+        if (qubit1 == i) or (qubit2 == i) or (qubit3 == i):
+            matrix = np.kron(matrix, X)
         else:
             matrix = np.kron(matrix, I)
     return matrix
