@@ -205,6 +205,8 @@ class Config:
         #   - custom_ansatz_terms: Custom Ansatz terms (only apply if gen_ansatz is "custom").
         #       + "X", "Y", "Z", "XX", "ZZ", "YY": Available custom ansatz terms.
         #
+        #   (In each layer, the outer loop is the type of gate, and the inner loop is the qubits they apply to).
+        #
         #############################################################################################
         self.gen_layers: int = 3  # 2, 3, 5, 10, 20 ...
         self.gen_ansatz: Literal["ZZ_YY_XX_Z", "ZZ_Z_X", "custom"] = "custom"
