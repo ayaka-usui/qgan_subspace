@@ -198,17 +198,17 @@ class Config:
         #   - gen_layers: Number of layers in the generator ansatz (default: ~4)
         #
         #   - gen_ansatz: Ansatz type for generator:
-        #       + "XX_YY_ZZ_Z": 2 body X, 2 body Y, 2 body Z and 1 body Z terms.
-        #       + "ZZ_X_Z": 2 body Z, 1 body X and 1 body Z terms.
-        #       + "custom": Custom ansatz, with two qubit and single qubit interactions.
+        #       + "ZZ_YY_XX_Z": First 1 body Z terms, then, 2 body Z, 2 body Y and 2 body X terms.
+        #       + "ZZ_Z_X": First 1 body X and 1 body Z terms, and then 2 body Z.
+        #       + "custom": Custom ansatz, with two qubit and single qubit interactions in the given order.
         #
         #   - custom_ansatz_terms: Custom Ansatz terms (only apply if gen_ansatz is "custom").
-        #       + "X", "Y", "Z", "XX", "ZZ", "YY":Available custom ansatz terms.
+        #       + "X", "Y", "Z", "XX", "ZZ", "YY": Available custom ansatz terms.
         #
         #############################################################################################
         self.gen_layers: int = 3  # 2, 3, 5, 10, 20 ...
-        self.gen_ansatz: Literal["XX_YY_ZZ_Z", "ZZ_X_Z", "custom"] = "custom"
-        self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "X"]  # "X", "Y", "Z", "XX", "ZZ", "YY"
+        self.gen_ansatz: Literal["ZZ_YY_XX_Z", "ZZ_Z_X", "custom"] = "custom"
+        self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "XX", "Y", "X"]  # "X", "Y", "Z", "XX", "ZZ", "YY"
 
         #############################################################################################
         # ---------------------

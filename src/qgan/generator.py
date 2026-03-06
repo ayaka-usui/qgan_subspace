@@ -300,16 +300,16 @@ class Ansatz:
         """Construct the ansatz based on the type specified.
 
         Args:
-            type_of_ansatz (str): Type of ansatz to construct, either 'XX_YY_ZZ_Z' or 'ZZ_X_Z'.
+            type_of_ansatz (str): Type of ansatz to construct, either 'ZZ_YY_XX_Z' or 'ZZ_Z_X'.
 
         Returns:
             callable: Function to construct the quantum circuit with the specified ansatz.
         """
-        if type_of_ansatz == "XX_YY_ZZ_Z":
-            return Ansatz.construct_qcircuit_XX_YY_ZZ_Z
+        if type_of_ansatz == "ZZ_YY_XX_Z":
+            return Ansatz.construct_qcircuit_ZZ_YY_XX_Z
 
-        if type_of_ansatz == "ZZ_X_Z":
-            return Ansatz.construct_qcircuit_ZZ_X_Z
+        if type_of_ansatz == "ZZ_Z_X":
+            return Ansatz.construct_qcircuit_ZZ_Z_X
 
         if type_of_ansatz == "custom":
             return Ansatz.construct_qcircuit_custom
@@ -318,7 +318,8 @@ class Ansatz:
 
     @staticmethod
     def construct_qcircuit_custom(qc: QuantumCircuit, size: int, layer: int) -> QuantumCircuit:
-        """Construct a quantum circuit with a custom ansatz of single and 2 qubit gates.
+        """Construct a quantum circuit with a custom ansatz of single and 2 qubit gates,
+        in the given order, first all the 1q gates, and then all the 2q gates.
 
         Args:
             qc (QuantumCircuit): Quantum Circuit
@@ -326,15 +327,15 @@ class Ansatz:
             layer (int): Number of layers
 
         Returns:
-            QuantumCircuit: Quantum Circuit with the ansatz of XYZ and FieldZ
+            QuantumCircuit: Quantum Circuit with the ansatz.
         """
         # If extra ancilla is used, different than ansatz, we reduce the size by 1,
         # to implement the ancilla logic separately.
         if CFG.extra_ancilla:
             size -= 1
 
-        entg_list = list({"XX", "YY", "ZZ"} & set(CFG.custom_ansatz_terms))
-        single_q_list = list({"X", "Y", "Z"} & set(CFG.custom_ansatz_terms))
+        entg_list = [gate for gate in CFG.custom_ansatz_terms if gate in ["XX", "YY", "ZZ"]]
+        single_q_list = [gate for gate in CFG.custom_ansatz_terms if gate in ["X", "Y", "Z"]]
 
         for _ in range(layer):
             # First 1 qubit gates
@@ -348,28 +349,25 @@ class Ansatz:
             # Then 2 qubit gates (outer loop of diff gates, inner loop of qubits)
             for gate, i in itertools.product(entg_list, range(size - 1)):
                 qc.add_gate(QuantumGate(gate, i, i + 1, angle=0))
-            # Ancilla ancilla coupling (2q) logic for: total and bridge
+            # Ancilla ancilla coupling (2q) logic (outer loop of diff gates, inner loop connectivity)
             if CFG.extra_ancilla:
-                if CFG.ancilla_topology == "total":
-                    for gate, i in itertools.product(entg_list, range(size)):
-                        qc.add_gate(QuantumGate(gate, i, size, angle=0))
-                if CFG.ancilla_topology == "bridge":
-                    for gate in entg_list:
+                qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
+                for gate in entg_list:
+                    if CFG.ancilla_topology == "total":
+                        for i in range(size):
+                            qc.add_gate(QuantumGate(gate, i, size, angle=0))
+                    if CFG.ancilla_topology == "bridge":
                         qc.add_gate(QuantumGate(gate, 0, size, angle=0))
-                if CFG.ancilla_topology in ["bridge", "ansatz"]:
-                    qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
-                    for gate in entg_list:
+                    if CFG.ancilla_topology in ["bridge", "ansatz"]:
                         qc.add_gate(QuantumGate(gate, qubit_to_connect_to, size, angle=0))
-                if CFG.ancilla_topology == "fake" and size > 2:
-                    qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
-                    for gate in entg_list:
+                    if CFG.ancilla_topology == "fake" and size > 2:
                         qc.add_gate(QuantumGate(gate, 0, qubit_to_connect_to, angle=0))
 
         return Ansatz.randomize_gates_in_qc(qc, size)
 
     @staticmethod
-    def construct_qcircuit_XX_YY_ZZ_Z(qc: QuantumCircuit, size: int, layer: int) -> QuantumCircuit:
-        """Construct a quantum circuit with the ansatz of XX YY ZZ and FieldZ
+    def construct_qcircuit_ZZ_YY_XX_Z(qc: QuantumCircuit, size: int, layer: int) -> QuantumCircuit:
+        """Construct a quantum circuit with the ansatz of first Z, then XX, then YY and finally ZZ.
 
         Args:
             qc (QuantumCircuit): Quantum Circuit
@@ -377,7 +375,7 @@ class Ansatz:
             layer (int): Number of layers
 
         Returns:
-            QuantumCircuit: Quantum Circuit with the ansatz of XYZ and FieldZ
+            QuantumCircuit: Quantum Circuit with the ansatz of XX, YY and ZZ and FieldZ
         """
         # If extra ancilla is used, different than ansatz, we reduce the size by 1,
         # to implement the ancilla logic separately.
@@ -397,28 +395,25 @@ class Ansatz:
             # Then 2 qubit gates:
             for gate, i in itertools.product(entg_list, range(size - 1)):
                 qc.add_gate(QuantumGate(gate, i, i + 1, angle=0))
-            # Ancilla ancilla coupling (2q) logic for: total and bridge
+            # Ancilla ancilla coupling (2q) logic (outer loop of diff gates, inner loop connectivity)
             if CFG.extra_ancilla:
-                if CFG.ancilla_topology == "total":
-                    for gate, i in itertools.product(entg_list, range(size)):
-                        qc.add_gate(QuantumGate(gate, i, size, angle=0))
-                if CFG.ancilla_topology == "bridge":
-                    for gate in entg_list:
+                qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
+                for gate in entg_list:
+                    if CFG.ancilla_topology == "total":
+                        for i in range(size):
+                            qc.add_gate(QuantumGate(gate, i, size, angle=0))
+                    if CFG.ancilla_topology == "bridge":
                         qc.add_gate(QuantumGate(gate, 0, size, angle=0))
-                if CFG.ancilla_topology in ["bridge", "ansatz"]:
-                    qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
-                    for gate in entg_list:
+                    if CFG.ancilla_topology in ["bridge", "ansatz"]:
                         qc.add_gate(QuantumGate(gate, qubit_to_connect_to, size, angle=0))
-                if CFG.ancilla_topology == "fake" and size > 2:
-                    qubit_to_connect_to = CFG.ancilla_connect_to if CFG.ancilla_connect_to is not None else size - 1
-                    for gate in entg_list:
+                    if CFG.ancilla_topology == "fake" and size > 2:
                         qc.add_gate(QuantumGate(gate, 0, qubit_to_connect_to, angle=0))
 
         return Ansatz.randomize_gates_in_qc(qc, size)
 
     @staticmethod
-    def construct_qcircuit_ZZ_X_Z(qc: QuantumCircuit, size: int, layer: int) -> QuantumCircuit:
-        """Construct a quantum circuit with the ansatz of ZZ and XZ
+    def construct_qcircuit_ZZ_Z_X(qc: QuantumCircuit, size: int, layer: int) -> QuantumCircuit:
+        """Construct a quantum circuit with the ansatz of X, then Z, and then ZZ.
 
         Args:
             qc (QuantumCircuit): Quantum Circuit
@@ -426,7 +421,7 @@ class Ansatz:
             layer (int): Number of layers
 
         Returns:
-            QuantumCircuit: Quantum Circuit with the ansatz of ZZ and XZ
+            QuantumCircuit: Quantum Circuit with the ansatz of ZZ and X, Z
         """
         # If extra ancilla is used, different than ansatz, we reduce the size by 1,
         # to implement the ancilla logic separately.
@@ -445,8 +440,7 @@ class Ansatz:
             # Then 2 qubit gates
             for i in range(size - 1):
                 qc.add_gate(QuantumGate("ZZ", i, i + 1, angle=0))
-            # Ancilla ancilla coupling (2q) logic for: total and bridge
-            if CFG.extra_ancilla:
+                # Ancilla ancilla coupling (2q) logic
                 if CFG.ancilla_topology == "total":
                     for i in range(size):
                         qc.add_gate(QuantumGate("ZZ", i, size, angle=0))
