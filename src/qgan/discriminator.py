@@ -49,28 +49,6 @@ Z = torch.tensor([[1, 0], [0, -1]], dtype=torch.complex128)
 
 PAULIS = [I, X, Y, Z]
 
-
-# -- BRAKET (torch version) ---------------------------------
-def braket(*args) -> torch.Tensor:
-    """Compute <bra| O_1 · O_2 · ... · O_n |ket> using torch tensors.
-
-    Same interface as the numpy version in cost_functions.py, but
-    operates on torch tensors so autograd can differentiate through it.
-
-    Args:
-        args: (bra, [operators...], ket) — all torch tensors.
-              bra and ket are column vectors (shape [d, 1]).
-              Operators are square matrices (shape [d, d]).
-
-    Returns:
-        torch.Tensor: scalar (complex) inner product.
-    """
-    bra, *ops, ket = args
-    for op in ops:
-        ket = torch.matmul(op, ket)
-    return torch.matmul(bra.conj().T, ket)
-
-
 # -- DISCRIMINATOR ---------------------------------
 # Wasserstein cost constants from config
 cst1, cst2, cst3, lamb = CFG.cst1, CFG.cst2, CFG.cst3, CFG.lamb
@@ -207,49 +185,6 @@ class Discriminator(nn.Module):
 
         # Negate for minimisation (discriminator maximises)
         return -cost
-
-    # -- training step (replaces update_dis) ---------------------------------
-    def update_dis(self, final_target_state: np.ndarray,
-                   final_gen_state: np.ndarray):
-        """One discriminator training step.
-
-        Drop-in replacement for the old update_dis(). Converts numpy
-        states to torch, computes loss, backpropagates, and steps.
-
-        Args:
-            final_target_state: numpy column vector (2^N, 1).
-            final_gen_state: numpy column vector (2^N, 1).
-        """
-        # Convert numpy states to torch (no gradient needed for states here)
-        target_t = torch.tensor(
-            np.asarray(final_target_state), dtype=torch.complex128
-        )
-        gen_t = torch.tensor(
-            np.asarray(final_gen_state), dtype=torch.complex128
-        )
-
-        self.optimizer.zero_grad()
-        loss = self.compute_loss(target_t, gen_t)
-        loss.backward()
-        self.optimizer.step()
-
-    # -- numpy interface for cost_functions.py compatibility ---------------------------------
-    def get_dis_matrices_rep_numpy(self) -> tuple[np.ndarray, np.ndarray,
-                                                   np.ndarray, np.ndarray]:
-        """Return (A, B, psi, phi) as numpy arrays (detached from graph).
-
-        Use this when we need the matrices for the generator gradient
-        or for compute_cost() in cost_functions.py, which still works
-        with numpy.
-        """
-        with torch.no_grad():
-            A, B, psi, phi = self.get_dis_matrices_rep()
-        return (
-            A.numpy(),
-            B.numpy(),
-            psi.numpy(),
-            phi.numpy(),
-        )
 
     # -- save / load ---------------------------------
     def save_model(self, file_path: str):

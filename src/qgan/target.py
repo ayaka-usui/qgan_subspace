@@ -265,7 +265,7 @@ def _rotated_surface_code_hamiltonian(size: int) -> qml.Hamiltonian:
     return qml.Hamiltonian(coeffs, ops)
 
 
-# -- MAIN PUBLIC FUNCTIONS ------------------------------------------------
+# -- MAIN FUNCTIONS ------------------------------------------------
 def get_target_unitary(target_type: str, size: int) -> np.ndarray:
     """Get the target unitary U = e^{-iH} based on the target type.
 

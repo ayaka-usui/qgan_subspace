@@ -445,21 +445,6 @@ class Generator:
         with torch.no_grad():
             self.total_gen_state = self.get_total_gen_state()
 
-    # -- numpy interface, for backward compatibility -----------------------
-    def get_total_gen_state_numpy(self) -> np.ndarray:
-        """Return the cached statevector as a numpy column vector.
-        """
-        with torch.no_grad():
-            state = self.get_total_gen_state()
-        return np.asmatrix(state.detach().numpy().reshape(-1, 1))
-
-    def get_final_gen_state_numpy(self) -> np.ndarray:
-        """Return the final (post-ancilla) state as a numpy column vector."""
-        with torch.no_grad():
-            total = self.get_total_gen_state()
-            final = self.get_final_gen_state(total)
-        return np.asmatrix(final.detach().numpy().reshape(-1, 1))
-
     # -- pickle support ----------------------------------------------------
     def __getstate__(self):
         """Exclude non-picklable objects (QNode, optimizer) from serialisation."""
