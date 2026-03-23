@@ -1,17 +1,3 @@
-# Copyright 2025 GIQ, Universitat Autònoma de Barcelona
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 """Training initialization module for running training instances"""
 
 import itertools
@@ -22,35 +8,31 @@ import traceback
 import numpy as np
 
 from config import CFG
-from qgan.training import Training
-from tools.data.data_managers import get_last_experiment_idx, print_and_log, print_and_log_with_headers
+from qgan.training import Training ##########
+from tools.data_managers import get_last_experiment_idx, print_and_log, print_and_log_with_headers
 from tools.plot_hub import generate_all_plots
 
 # ruff: noqa: E226
+# indicates that the linter (a program that automatically checks code quality) 
+# should not check this line. Any warnings that code may have generated will be ignored.
 
 
-#################################################################################################################
-# SINGLE RUN MODE:
-#################################################################################################################
+# -- SINGLE RUN MODE ------------------------------------------
 def run_single_training():
     """
     Runs a single training instance.
     """
-    print_and_log("Running in SINGLE RUN mode.\n", CFG.log_path)
+    print_and_log("Running in SINGLE RUN mode: \n", CFG.log_path)
 
     try:
-        ##############################################################
         # Run single training instance with specified configuration
-        ##############################################################
         training_instance = Training()
         training_instance.run()
         success_msg = "\nDefault configuration run COMPLETED SUCCESSFULLY.\n"
         print_and_log(success_msg, CFG.log_path)  # Log to file
 
     except Exception as e:  # noqa: BLE001
-        ##############################################################
         # Handle exceptions during the training run
-        ##############################################################
         tb_str = traceback.format_exc()
         error_msg = (
             f"\n{'-' * 60}\n"
@@ -63,9 +45,7 @@ def run_single_training():
         print_and_log(error_msg, CFG.log_path)  # Log to file
 
 
-#################################################################################################################
-# MULTIPLE RUNS MODE, WITH AND WITHOUT COMMON INITIAL EXPERIMENTS:
-#################################################################################################################
+# -- MULTIPLE RUNS MODE, WITH AND WITHOUT COMMON INITIAL EXPERIMENTS: --------------
 def run_multiple_trainings():
     """Runs the multiple training logic, both for common initial plateaus
     with later changes, and for no common initial plateaus.
@@ -76,17 +56,13 @@ def run_multiple_trainings():
     It also generates plots for all runs after completion, and raises the necessary
     exceptions if any errors occur during the training.
     """
-    ##############################################################
-    # Loading previous MULTIPLE run timestamp if specified:
-    ##############################################################
+    # -- Loading previous MULTIPLE run timestamp if specified:
     if CFG.load_timestamp is not None:
         if CFG.common_initial_plateaus:
             _check_for_previous_multiple_runs()
         CFG.run_timestamp = CFG.load_timestamp
 
-    ################################################################
-    # Change results directory to MULTIPLE RUNS:
-    ################################################################
+    # -- Change results directory to MULTIPLE RUNS:
     base_path = f"./generated_data/{CFG.run_timestamp}"
     CFG.base_data_path = base_path
     CFG.set_results_paths()
@@ -102,18 +78,14 @@ def run_multiple_trainings():
         config_str = ", ".join(f"{key}: {value}" for key, value in config_dict.items())
         print_and_log(f"- {config_str}\n", CFG.log_path)
 
-    ##############################################################
-    # Execute multiple training instances (with/out common initial exp.)
-    ##############################################################
+    # -- Execute multiple training instances (with/out common initial exp.)
     try:
         if CFG.common_initial_plateaus:
             execute_from_common_initial_plateaus(base_path)
         else:
             execute_from_no_common_initial_plateaus(base_path)
 
-        ##############################################################
-        # Generate plots for all runs
-        ##############################################################
+        # -- Generate plots for all runs
         generate_all_plots(
             base_path,
             CFG.log_path,
@@ -124,9 +96,7 @@ def run_multiple_trainings():
         print_and_log("\nAll multiple training runs completed.\n", CFG.log_path)
         print_and_log("\nAnalysis plots (recurrence vs max fidelity, averages, and success rates) generated.\n", CFG.log_path)
 
-    ##############################################################
-    # Handle exceptions during the training run
-    ##############################################################
+    # -- Handle exceptions during the training run
     except Exception as e:
         tb_str = traceback.format_exc()
         error_msg = (
@@ -153,9 +123,7 @@ def _check_for_previous_multiple_runs():
         raise RuntimeError("Current config does not match previous initial plateaus. Aborting.")
 
 
-#############################################################################
-# Execute multiple training instances with no common initial plateaus
-#############################################################################
+# -- Execute multiple training instances with no common initial plateaus
 def execute_from_no_common_initial_plateaus(base_path):
     """
     Runs multiple experiments from scratch (no common initial plateaus),
@@ -184,9 +152,7 @@ def execute_from_no_common_initial_plateaus(base_path):
             print_and_log(f"\nExperiment {new_run_idx}, repetition {rep + 1} completed.\n", CFG.log_path)
 
 
-#############################################################################
 # Execute multiple training instances with common initial plateaus
-#############################################################################
 def execute_from_common_initial_plateaus(base_path):
     """
     Runs multiple training instances, with a change in the middle.
@@ -205,27 +171,21 @@ def execute_from_common_initial_plateaus(base_path):
     # Find the last run index if loading previous multiple runs
     last_idx = 0 if CFG.load_timestamp is None else get_last_experiment_idx(base_path, common_initial_plateaus=True)
 
-    #############################################################
-    # Run initial plateaus
-    #############################################################
+    # -- Run initial plateaus --------------
     if CFG.load_timestamp is None:
         print_and_log("\nRunning initial plateaus.\n", CFG.log_path)
         _run_initial_plateaus(N_initial_plateaus, base_path)
     else:
         print_and_log("\nFollowing previous MULTIPLE run, initial plateaus will be skipped.\n", CFG.log_path)
 
-    #############################################################
-    # Run controls from each initial plateau
-    #############################################################
+    # -- Run controls from each initial plateau --------------
     if CFG.load_timestamp is None:
         print_and_log("\nRunning control experiments on plateaus.\n", CFG.log_path)
         _run_repeated_experiments(N_initial_plateaus, N_reps_each_init_plateau, base_path, "control")
     else:
         print_and_log("\nFollowing previous MULTIPLE run, control experiments will be skipped.\n", CFG.log_path)
 
-    #############################################################
-    # Run changed experiments from each initial plateau, for each config in reps_new_config:
-    #############################################################
+    # -- Run changed experiments from each initial plateau, for each config in reps_new_config:
     for run_idx, config_dict in enumerate(CFG.reps_new_config, 1):
         new_run_idx = last_idx + run_idx
         for key, value in config_dict.items():

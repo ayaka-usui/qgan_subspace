@@ -1,126 +1,156 @@
-# Copyright 2025 GIQ, Universitat Autònoma de Barcelona
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""Ancilla post-processing tools."""
+"""Ancilla post-processing tools — PennyLane rewrite.
+
+Public interface unchanged:
+    get_max_entangled_state_with_ancilla_if_needed(size) -> (gen_state, target_state)
+    project_ancilla_zero(state, renormalize)              -> (projected_state, prob)
+    trace_out_ancilla(state)                              -> sampled_state
+    get_final_gen_state_for_discriminator(state)           -> final_state
+"""
 
 import numpy as np
-
+import pennylane as qml
+import torch 
+import torch.nn as nn
 from config import CFG
 
+# -- ANCILLA POST-PROCESSING -----------------------------
+def _project_ancilla_zero_torch(state: torch.Tensor,
+                                 renormalize: bool = True
+                                 ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Project the last qubit onto |0> (torch version, differentiable).
 
-def get_max_entangled_state_with_ancilla_if_needed(size: int) -> np.ndarray:
-    """Get the maximally entangled state for the system size (With Ancilla if needed).
-
-    Args:
-        size (int): the size of the system.
-
-    Returns:
-        tuple[np.ndarray]: the maximally entangled states, plus ancilla if needed for generation and target.
-    """
-    # Generate the maximally entangled state for the system size
-    state = np.zeros(2 ** (2 * size), dtype=complex)
-    dim_register = 2**size
-    for i in range(dim_register):
-        state[i * dim_register + i] = 1.0
-    state /= np.sqrt(dim_register)
-
-    # Add ancilla qubit at the end, if needed
-    initial_state_with_ancilla = np.kron(state, np.array([1, 0], dtype=complex))
-
-    # Different conditions for gen and target:
-    initial_state_for_gen = initial_state_with_ancilla if CFG.extra_ancilla else state
-    initial_state_for_target = initial_state_with_ancilla if CFG.extra_ancilla and CFG.ancilla_mode == "pass" else state
-
-    return np.asmatrix(initial_state_for_gen).T, np.asmatrix(initial_state_for_target).T
-
-
-def project_ancilla_zero(state: np.ndarray, renormalize: bool = True) -> tuple[np.ndarray, float]:
-    """Project the last qubit onto |0> and renormalize. Assumes state is a column vector.
+    Keeps only the amplitudes where the ancilla is in |0> (even indices).
+    This is differentiable through autograd since it's just slicing + division.
 
     Args:
-        state (np.ndarray): The quantum state vector to project.
-        renormalize (bool): Whether to renormalize the projected state.
+        state: Statevector as a 1D torch tensor, shape (2^N,).
+        renormalize: Whether to renormalize the projected state.
 
     Returns:
-        np.ndarray: The projected state vector, normalized, with the ancilla qubit removed.
-        float: The probability of the ancilla being in state |0>.
+        (projected_state, prob_zero):
+            projected_state: shape (2^(N-1), 1) column vector.
+            prob_zero: scalar, probability of ancilla being |0>.
     """
-    state = np.asarray(state).flatten()
-
-    # Remove the ancilla qubit: keep only even indices:
+    # Even indices = ancilla in |0>
     projected = state[::2]
 
-    # Compute the norm of the projected state:
-    norm = np.linalg.norm(projected)
+    # Norm^2 = probability of |0>
+    prob = torch.sum(projected.conj() * projected).real
 
-    if norm == 0:  # Return the system part (without ancilla) as zeros
-        return np.zeros((2 ** (CFG.system_size * 2), 1)), 0.0
+    if prob.item() < 1e-15:
+        n_system_qubits = CFG.system_size * 2  # choi + system register
+        return (
+            torch.zeros(2**n_system_qubits, 1, dtype=torch.complex128),
+            torch.tensor(0.0, dtype=torch.float64),
+        )
 
-    # Renormalize if needed:
     if renormalize:
         if CFG.ancilla_project_norm == "re-norm":
-            projected = projected / norm
+            projected = projected / torch.sqrt(prob)
         elif CFG.ancilla_project_norm != "pass":
             raise ValueError(f"Unknown ancilla_project_norm: {CFG.ancilla_project_norm}")
 
-    return np.asmatrix(projected.reshape(-1, 1)), norm**2
+    return projected.reshape(-1, 1), prob
 
 
-# TODO: Think better what to do with this function... (how to use it)
-def trace_out_ancilla(state: np.ndarray) -> np.ndarray:
-    """Trace out the last qubit and return a sampled pure state from the reduced density matrix.
+def _trace_out_ancilla_torch(state: torch.Tensor) -> torch.Tensor:
+    """Trace out the last qubit and return a sampled pure state (torch version).
+
+    This operation involves eigendecomposition + stochastic sampling,
+    which breaks differentiability. Same limitation as the original numpy version.
+    (Ask Guille if is legal or we can do it better)
 
     Args:
-        state (np.ndarray): The quantum state vector to trace out the ancilla.
+        state: Statevector as a 1D torch tensor, shape (2^N,).
 
     Returns:
-        np.ndarray: The sampled pure state after tracing out the ancilla.
+        Sampled pure state, shape (2^(N-1), 1) column vector.
     """
-    # state: (2**num_qubits, 1)
-    state = np.asarray(state).flatten()
-    # Reshape to (2**(n-1), 2) for last qubit
-    state = state.reshape(-1, 2)
-    # Compute reduced density matrix by tracing out last qubit
-    rho_reduced = np.zeros((state.shape[0], state.shape[0]), dtype=complex)
-    for i in range(2):
-        rho_reduced += np.dot(state[:, i : i + 1], state[:, i : i + 1].conj().T)
+    n_total = state.shape[0]
+    n_qubits = int(np.log2(n_total))
+    n_system = n_qubits - 1
+
+    # Full density matrix |psi><psi|
+    rho_full = torch.outer(state, state.conj())
+
+    # Reshape to (2^n_system, 2, 2^n_system, 2) and trace over ancilla (last qubit)
+    dim_sys = 2 ** n_system
+    rho_reshaped = rho_full.reshape(dim_sys, 2, dim_sys, 2)
+    # Trace over ancilla: sum over ancilla indices (axes 1 and 3)
+    rho_reduced = torch.einsum("iaja->ij", rho_reshaped)
+
     # Sample a pure state from the reduced density matrix
-    eigvals, eigvecs = np.linalg.eigh(rho_reduced)
+    rho_np = rho_reduced.detach().numpy()
+    eigvals, eigvecs = np.linalg.eigh(rho_np)
     eigvals = np.maximum(eigvals, 0)
     eigvals = eigvals / np.sum(eigvals)
+
     idx = np.random.choice(len(eigvals), p=eigvals)
-    sampled_state = eigvecs[:, idx]
-    return np.asmatrix(sampled_state.reshape(-1, 1))
+    sampled = torch.tensor(eigvecs[:, idx], dtype=torch.complex128)
+
+    return sampled.reshape(-1, 1)
 
 
-def get_final_gen_state_for_discriminator(total_output_state: np.ndarray) -> np.ndarray:
-    """Modifies the gen state to be passed to the discriminator, according to ancilla_mode.
+def get_final_gen_state_torch(total_output_state: torch.Tensor) -> torch.Tensor:
+    """Process the generator output state according to ancilla_mode.
+
+    Routes to the appropriate post-processing:
+        - "pass":    state goes directly to discriminator
+        - "project": project ancilla onto |0>, remove it 
+        - "trace":   trace out ancilla, sample pure state 
 
     Args:
-        total_output_state (np.ndarray): The output state from the generator.
+        total_output_state: Generator output, 1D torch tensor of shape (2^N,).
 
     Returns:
-        np.ndarray: The final state to be passed to the discriminator.
+        Column vector, shape (d, 1), as torch tensor.
     """
-    total_final_state = total_output_state
-    if CFG.extra_ancilla:
-        if CFG.ancilla_mode == "pass":
-            # Pass ancilla to discriminator (current behavior)
-            return total_final_state
-        if CFG.ancilla_mode == "project":
-            projected, _ = project_ancilla_zero(total_final_state)
-            return projected
-        if CFG.ancilla_mode == "trace":
-            return trace_out_ancilla(total_final_state)
-        raise ValueError(f"Unknown ancilla_mode: {CFG.ancilla_mode}")
-    return total_final_state
+    if not CFG.extra_ancilla:
+        return total_output_state.reshape(-1, 1)
+
+    if CFG.ancilla_mode == "pass":
+        return total_output_state.reshape(-1, 1)
+    if CFG.ancilla_mode == "project":
+        projected, _ = _project_ancilla_zero_torch(total_output_state)
+        return projected
+    if CFG.ancilla_mode == "trace":
+        return _trace_out_ancilla_torch(total_output_state)
+
+    raise ValueError(f"Unknown ancilla_mode: {CFG.ancilla_mode}")
+
+# -- MAXIMALLY ENTANGLED STATE PREPARATION -------------------
+def get_max_entangled_state_torch(size: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Prepare |\Phi^+> on 2*size qubits, optionally tensored with |0> for ancilla.
+
+    Returns torch tensors (no gradient needed — these are fixed input states).
+
+    Args:
+        size: Number of qubits per register (system_size).
+
+    Returns:
+        (initial_state_for_gen, initial_state_for_target):
+            Both as column vectors, shape (d, 1), complex128.
+    """
+    n_choi = 2 * size
+    dev = qml.device("default.qubit", wires=n_choi)
+
+    @qml.qnode(dev, interface="numpy")
+    def bell_state_circuit():
+        for i in range(size):
+            qml.Hadamard(wires=i)
+            qml.CNOT(wires=[i, i + size])
+        return qml.state()
+
+    state_np = np.array(bell_state_circuit(), dtype=complex)
+    state = torch.tensor(state_np, dtype=torch.complex128)
+
+    # Add ancilla |0> if needed
+    ancilla_zero = torch.tensor([1.0, 0.0], dtype=torch.complex128)
+    state_with_ancilla = torch.kron(state, ancilla_zero)
+
+    initial_for_gen = state_with_ancilla if CFG.extra_ancilla else state
+    initial_for_target = (
+        state_with_ancilla if CFG.extra_ancilla and CFG.ancilla_mode == "pass" else state
+    )
+
+    return initial_for_gen.reshape(-1, 1), initial_for_target.reshape(-1, 1)
