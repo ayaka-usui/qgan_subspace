@@ -71,7 +71,7 @@ class Config:
         # -- Loading and warm start ----------------------------
         # Load a previous run by timestamp. Supports \pm 1 qubit (ancilla add/remove).
 
-        self.load_timestamp: Optional[str] = None # "2026-03-10__18-57-21"
+        self.load_timestamp: Optional[str] = "2026-03-23__14-41-35"
         self.type_of_warm_start: Literal["none", "all", "some"] = "none"
         self.warm_start_strength: Optional[float] = 0.1
 

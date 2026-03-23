@@ -73,7 +73,7 @@ class Training:
 
         # Target state: (I ⊗ U_target) |\Phi^+ >
         # get_final_target_state returns numpy, convert to torch
-        target_np = get_final_target_state(initial_state_final.numpy())
+        target_np = get_final_target_state(initial_state_final.detach().numpy())
         self.final_target_state: torch.Tensor = torch.tensor(
             np.asarray(target_np), dtype=torch.complex128
         ).reshape(-1)
