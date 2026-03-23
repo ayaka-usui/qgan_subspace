@@ -1,6 +1,19 @@
+# Copyright 2025 GIQ, Universitat Autònoma de Barcelona
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Ancilla post-processing tools — PennyLane rewrite.
 
-Public interface unchanged:
+Unchanged:
     get_max_entangled_state_with_ancilla_if_needed(size) -> (gen_state, target_state)
     project_ancilla_zero(state, renormalize)              -> (projected_state, prob)
     trace_out_ancilla(state)                              -> sampled_state
@@ -12,6 +25,44 @@ import pennylane as qml
 import torch 
 import torch.nn as nn
 from config import CFG
+
+
+# -- MAXIMALLY ENTANGLED STATE PREPARATION -------------------
+def get_max_entangled_state_torch(size: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Prepare |\Phi^+> on 2*size qubits, optionally tensored with |0> for ancilla.
+
+    Returns torch tensors (no gradient needed, since they are fixed input states).
+
+    Args:
+        size: Number of qubits per register (system_size).
+
+    Returns:
+        (initial_state_for_gen, initial_state_for_target):
+            Both as column vectors, shape (d, 1), complex128.
+    """
+    n_choi = 2 * size
+    dev = qml.device("default.qubit", wires=n_choi)
+
+    @qml.qnode(dev, interface="numpy")
+    def bell_state_circuit():
+        for i in range(size):
+            qml.Hadamard(wires=i)
+            qml.CNOT(wires=[i, i + size])
+        return qml.state()
+
+    state_np = np.array(bell_state_circuit(), dtype=complex)
+    state = torch.tensor(state_np, dtype=torch.complex128)
+
+    # Add ancilla |0> if needed
+    ancilla_zero = torch.tensor([1.0, 0.0], dtype=torch.complex128)
+    state_with_ancilla = torch.kron(state, ancilla_zero)
+
+    initial_for_gen = state_with_ancilla if CFG.extra_ancilla else state
+    initial_for_target = (
+        state_with_ancilla if CFG.extra_ancilla and CFG.ancilla_mode == "pass" else state
+    )
+
+    return initial_for_gen.reshape(-1, 1), initial_for_target.reshape(-1, 1)
 
 # -- ANCILLA POST-PROCESSING -----------------------------
 def _project_ancilla_zero_torch(state: torch.Tensor,
@@ -117,40 +168,3 @@ def get_final_gen_state_torch(total_output_state: torch.Tensor) -> torch.Tensor:
         return _trace_out_ancilla_torch(total_output_state)
 
     raise ValueError(f"Unknown ancilla_mode: {CFG.ancilla_mode}")
-
-# -- MAXIMALLY ENTANGLED STATE PREPARATION -------------------
-def get_max_entangled_state_torch(size: int) -> tuple[torch.Tensor, torch.Tensor]:
-    """Prepare |\Phi^+> on 2*size qubits, optionally tensored with |0> for ancilla.
-
-    Returns torch tensors (no gradient needed — these are fixed input states).
-
-    Args:
-        size: Number of qubits per register (system_size).
-
-    Returns:
-        (initial_state_for_gen, initial_state_for_target):
-            Both as column vectors, shape (d, 1), complex128.
-    """
-    n_choi = 2 * size
-    dev = qml.device("default.qubit", wires=n_choi)
-
-    @qml.qnode(dev, interface="numpy")
-    def bell_state_circuit():
-        for i in range(size):
-            qml.Hadamard(wires=i)
-            qml.CNOT(wires=[i, i + size])
-        return qml.state()
-
-    state_np = np.array(bell_state_circuit(), dtype=complex)
-    state = torch.tensor(state_np, dtype=torch.complex128)
-
-    # Add ancilla |0> if needed
-    ancilla_zero = torch.tensor([1.0, 0.0], dtype=torch.complex128)
-    state_with_ancilla = torch.kron(state, ancilla_zero)
-
-    initial_for_gen = state_with_ancilla if CFG.extra_ancilla else state
-    initial_for_target = (
-        state_with_ancilla if CFG.extra_ancilla and CFG.ancilla_mode == "pass" else state
-    )
-
-    return initial_for_gen.reshape(-1, 1), initial_for_target.reshape(-1, 1)

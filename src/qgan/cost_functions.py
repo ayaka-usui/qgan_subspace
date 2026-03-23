@@ -1,3 +1,16 @@
+# Copyright 2025 GIQ, Universitat Autònoma de Barcelona
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Cost and Fidelity Functions — PyTorch version.
 
 Reduced from the original cost_functions.py:
@@ -13,26 +26,6 @@ provide evaluation metrics for logging during training.
 
 import torch
 import numpy as np
-
-
-def compute_fidelity(final_target_state: torch.Tensor,
-                     final_gen_state: torch.Tensor) -> float:
-    """Calculate the fidelity between target and generated states.
-
-    Fidelity = |<target|gen>|^2 (for pure states)
-
-    Args:
-        final_target_state: Target state, shape (d,) or (d, 1).
-        final_gen_state: Generator state, shape (d,) or (d, 1).
-
-    Returns:
-        float: fidelity ∈ [0, 1].
-    """
-    t = final_target_state.reshape(-1)
-    g = final_gen_state.reshape(-1)
-    overlap = torch.dot(t.conj(), g)
-    return float(torch.abs(overlap) ** 2)
-
 
 def compute_cost(dis, final_target_state: torch.Tensor,
                  final_gen_state: torch.Tensor) -> float:
@@ -53,6 +46,23 @@ def compute_cost(dis, final_target_state: torch.Tensor,
         neg_cost = dis.compute_loss(final_target_state, final_gen_state)
     return float(-neg_cost)
 
+def compute_fidelity(final_target_state: torch.Tensor,
+                     final_gen_state: torch.Tensor) -> float:
+    """Calculate the fidelity between target and generated states.
+
+    Fidelity = |<target|gen>|^2 (for pure states)
+
+    Args:
+        final_target_state: Target state, shape (d,) or (d, 1).
+        final_gen_state: Generator state, shape (d,) or (d, 1).
+
+    Returns:
+        float: fidelity ∈ [0, 1].
+    """
+    t = final_target_state.reshape(-1)
+    g = final_gen_state.reshape(-1)
+    overlap = torch.dot(t.conj(), g)
+    return float(torch.abs(overlap) ** 2)
 
 def compute_fidelity_and_cost(dis, final_target_state: torch.Tensor,
                                final_gen_state: torch.Tensor) -> tuple[float, float]:

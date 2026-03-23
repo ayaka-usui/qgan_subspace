@@ -1,3 +1,16 @@
+# Copyright 2025 GIQ, Universitat Autònoma de Barcelona
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Configuration for the QGAN experiment
 No big changed from original """
 
@@ -59,7 +72,7 @@ class Config:
         # Load a previous run by timestamp. Supports \pm 1 qubit (ancilla add/remove).
 
         self.load_timestamp: Optional[str] = None # "2026-03-10__18-57-21"
-        self.type_of_warm_start: Literal["none", "all", "some"] = "some"
+        self.type_of_warm_start: Literal["none", "all", "some"] = "none"
         self.warm_start_strength: Optional[float] = 0.1
 
         # -- Training ------------------------------------------
@@ -110,7 +123,7 @@ class Config:
 
         self.gen_layers: int = 3
 
-        self.gen_ansatz: Literal["ZZ_YY_XX_Z", "ZZ_Z_X", "custom"] = "custom"
+        self.gen_ansatz: Literal["ZZ_YY_XX_Z", "ZZ_Z_X", "custom"] = "ZZ_Z_X"
         self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "XX", "Y", "X"]
 
         # -- Target Hamiltonian ----------------------------
@@ -120,8 +133,8 @@ class Config:
         #   Available: I, X, Y, Z, XX, XZ, ZZ, ZZZ, ZZZZ, XZX, XXXX
 
         self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "ising_h", "custom_h"] = "custom_h"
-        self.custom_hamiltonian_terms: Optional[list[str]] = ["XZX", "ZZ"]
-        self.custom_hamiltonian_strengths: Optional[list[float]] = [0.8, 0.2]
+        self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ"]
+        self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0]
 
         # -- Optimiser --------------------------------------
         self.l_rate: float = 0.01
