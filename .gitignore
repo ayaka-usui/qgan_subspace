@@ -1,9 +1,9 @@
-# Virtual environments
-.venv
-
-# Generated files
+*.txt
+*.png
+*.jpg
+*.pdf
+*.pkl
+*.pyc
 generated_data/
-*data/
-*log*
-*cache*
+generated_data
 .DS_Store
