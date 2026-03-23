@@ -31,7 +31,7 @@ from qgan.ancilla import (
     get_max_entangled_state_torch,
 )
 from qgan.discriminator import Discriminator
-from qgan.cost_function import compute_fidelity_and_cost
+from qgan.cost_functions import compute_fidelity_and_cost
 from qgan.target import get_final_target_state
 from tools.data_managers import (
     print_and_log,
