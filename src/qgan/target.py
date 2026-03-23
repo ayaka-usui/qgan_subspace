@@ -121,7 +121,7 @@ def construct_target(size: int, terms: list[str], strengths: list[float]) -> np.
         # Add more terms as needed
         else:
             raise ValueError(f"Unknown term '{term}' in custom_hamiltonian_terms.")
-    return linalg.expm(-1j * H)
+    return linalg.expm(-1j * H * CFG.time_to_evolve)
 
 
 def construct_clusterH(size: int) -> np.ndarray:
@@ -139,7 +139,7 @@ def construct_clusterH(size: int) -> np.ndarray:
         H += term_Z(size, i)
     H += term_Z(size, size - 2)
     H += term_Z(size, size - 1)
-    return linalg.expm(-1j * H)
+    return linalg.expm(-1j * H * CFG.time_to_evolve)
 
 
 def construct_RotatedSurfaceCode(size: int) -> np.ndarray:
@@ -169,7 +169,7 @@ def construct_RotatedSurfaceCode(size: int) -> np.ndarray:
     else:
         sys.exit("system size is not 2*2 or 3*3 either")
 
-    return linalg.expm(-1j * H)
+    return linalg.expm(-1j * H * CFG.time_to_evolve)
 
 
 def construct_ising(size):
@@ -181,7 +181,7 @@ def construct_ising(size):
         H += -term_X(size, i)
     H += -term_X(size, size - 1)
 
-    return linalg.expm(-1j * H)
+    return linalg.expm(-1j * H * CFG.time_to_evolve)
 
 
 ##############################################################

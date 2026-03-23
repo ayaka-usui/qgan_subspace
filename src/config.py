@@ -216,6 +216,7 @@ class Config:
         # ---------------------
         # TARGET CONFIGURATION
         # ---------------------
+        #   - time_to_evolve: Time t to evolve with the Hamiltonian exp^(-iHt), for the target state preparation (default: 1.0).
         #   - target_hamiltonian: Target Hamiltonian type:
         #       + "cluster_h": Cluster Hamiltonian (default).
         #       + "rotated_surface_h": Rotated surface code (only for squared sizes: 4, 9, 16...).
@@ -228,6 +229,7 @@ class Config:
         #   - custom_hamiltonian_strengths: Strengths for the custom H terms (only apply if target_hamiltonian is "custom_h").
         #
         #############################################################################################
+        self.time_to_evolve: float = 1.0  # Time to evolve with the Hamiltonian, for the target state preparation.
         self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "ising_h", "custom_h"] = "custom_h"
         self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ"]  # "I", "X", "Y", "Z", "XX", "XZ", "ZZZ", ...
         self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0]  # Strengths for the above terms.
@@ -305,6 +307,7 @@ class Config:
             f"gen_layers: {self.gen_layers},\n"
             f"gen_ansatz: {self.gen_ansatz},\n"
             "----------------------------------------------\n"
+            f"time_to_evolve: {self.time_to_evolve},\n"
             f"target_hamiltonian: {self.target_hamiltonian},\n"
             f"custom_hamiltonian_terms: {self.custom_hamiltonian_terms},\n"
             f"custom_hamiltonian_strengths: {self.custom_hamiltonian_strengths},\n"
