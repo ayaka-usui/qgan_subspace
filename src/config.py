@@ -30,15 +30,15 @@ class Config:
         # -- Run mode ----------------------------
         # Single run or multiple experiments with optional shared initial plateaus.
 
-        self.run_multiple_experiments: bool = True
-        self.common_initial_plateaus: bool = True
+        self.run_multiple_experiments: bool = False
+        self.common_initial_plateaus: bool = False
 
         # If common_initial_plateaus:
         self.N_initial_plateaus: int = 5
         self.N_reps_each_init_plateau: int = 1
 
         # If not common_initial_plateaus:
-        self.N_reps_if_from_scratch: int = 3
+        self.N_reps_if_from_scratch: int = 5
 
         # Configurations to compare (each dict overrides CFG attributes):
         self.reps_new_config: list[dict[str, Any]] = [
@@ -71,7 +71,7 @@ class Config:
         # -- Loading and warm start ----------------------------
         # Load a previous run by timestamp. Supports \pm 1 qubit (ancilla add/remove).
 
-        self.load_timestamp: Optional[str] = "2026-03-23__14-41-35"
+        self.load_timestamp: Optional[str] = None #"2026-03-23__14-41-35"
         self.type_of_warm_start: Literal["none", "all", "some"] = "none"
         self.warm_start_strength: Optional[float] = 0.1
 
@@ -101,11 +101,11 @@ class Config:
         #   trace   : trace out ancilla, sample pure state
 
         self.system_size: int = 3
-        self.extra_ancilla: bool = False # We begin with no extra qubits, but we add once we reach the Plateau
+        self.extra_ancilla: bool = True # We begin with no extra qubits, but we add once we reach the Plateau
         # Ancilla mode define what happens to the ancilla before Discriminator (ancilla.py)
         self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "pass" 
         self.ancilla_project_norm: Optional[Literal["re-norm", "pass"]] = "re-norm"
-        self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "bridge"
+        self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "total"
         self.ancilla_connect_to: Optional[int] = None
         self.do_ancilla_1q_gates: bool = True
         self.start_ancilla_gates_randomly: bool = True

@@ -39,6 +39,7 @@ import pennylane as qml
 from config import CFG
 from tools.data_managers import print_and_log
 from qgan.ancilla import get_final_gen_state_torch
+from qgan.cost_functions import compute_cost
 
 # Wasserstein cost constants from config
 cst1, cst2, cst3, lamb = CFG.cst1, CFG.cst2, CFG.cst3, CFG.lamb
@@ -365,65 +366,40 @@ class Generator:
         return get_final_gen_state_torch(total_gen_state)
 
     # -- loss computation --------------------------------------------------
-    def compute_loss(self, dis, final_target_state: torch.Tensor) -> torch.Tensor:
-        """Compute the generator's Wasserstein loss as a differentiable scalar.
-
-        Uses density matrices and torch.trace, same formulation as the
-        discriminator's compute_loss:
-            <psi|O|psi> = Tr[O · \rho]
-            <\Phi|O|psi> · <psi|O'|\Phi> = Tr[O · \rho_psi · O' · \rho_\Phi]
-
-        The generator MINIMISES:
-            Loss = psi_term − \Phi_term − reg_term
-
-        Args:
-            dis: Discriminator (torch version, from discriminator_torch.py).
-            final_target_state: Target state, shape (d,) or (d, 1), complex128.
-
-        Returns:
-            torch.Tensor: scalar loss for minimisation.
-        """
-        # Forward pass through the circuit
+    def compute_loss(self, dis, final_target_state):
+        """Compute the Wasserstein loss as a differentiable scalar."""
         total_gen_state = self.get_total_gen_state()
-        self.total_gen_state = total_gen_state  
-
-        # Ancilla post-processing
+        self.total_gen_state = total_gen_state
         final_gen_state = self.get_final_gen_state(total_gen_state)
 
-        # Get discriminator matrices (detached — no gradient flow to discriminator)
+        # Detach dis matrices so gradients only flow through gen params
         with torch.no_grad():
             A, B, psi, phi = dis.get_dis_matrices_rep()
-        A = A.detach()
-        B = B.detach()
-        psi = psi.detach()
-        phi = phi.detach()
+        A = A.detach(); B = B.detach(); psi = psi.detach(); phi = phi.detach()
 
-        # Build density matrices
         g = final_gen_state.reshape(-1)
         t = final_target_state.reshape(-1)
-        rho_g = torch.outer(g, g.conj())  # |gen><gen|
-        rho_t = torch.outer(t, t.conj())  # |target><target|
 
-        # psi term: Tr[psi · \rho_t]
-        psi_term = torch.trace(psi @ rho_t)
+        Ag = A @ g;  Bg = B @ g;  At = A @ t;  Bt = B @ t
+        term1 = torch.vdot(g, Ag)
+        term2 = torch.vdot(t, Bt)
+        term3 = torch.vdot(Bg, t)
+        term4 = torch.vdot(t, Ag)
+        term5 = torch.vdot(Ag, t)
+        term6 = torch.vdot(t, Bg)
+        term7 = torch.vdot(Bg, g)
+        term8 = torch.vdot(t, At)
+        psiterm = torch.vdot(t, psi @ t)
+        phiterm = torch.vdot(g, phi @ g)
+        regterm = (CFG.lamb / np.e) * (
+            CFG.cst1 * term1 * term2
+            - CFG.cst2 * (term3 * term4 + term5 * term6)
+            + CFG.cst3 * term7 * term8
+        )
+        loss = (psiterm - phiterm - regterm).real
+        return loss
 
-        # \Phi term: Tr[\Phi · \rho_g] 
-        phi_term = torch.trace(phi @ rho_g)
-
-        # Regularisation: cross terms collapse into single traces
-        t1 = torch.trace(A @ rho_g) * torch.trace(B @ rho_t)
-        t2 = torch.trace(A @ rho_g @ B @ rho_t)
-        t3 = torch.trace(A @ rho_t @ B @ rho_g)
-        t4 = torch.trace(A @ rho_t) * torch.trace(B @ rho_g)
-        reg_term = lamb / np.e * (cst1 * t1 - cst2 * (t2 + t3) + cst3 * t4)
-
-        # Full cost
-        cost = (psi_term - phi_term - reg_term).real
-
-        # Generator minimises the cost
-        return cost
-
-    # -- training step (replaces update_gen) --------------------------------
+    # -- training step --------------------------------
     def update_gen(self, dis, final_target_state: torch.Tensor):
         """One generator optimisation step (minimisation).
 
@@ -432,7 +408,7 @@ class Generator:
         and steps the optimizer.
 
         Args:
-            dis: Discriminator (torch version).
+            dis: Discriminator
             final_target_state: Target state as torch tensor, shape (d, 1).
                 If you have a numpy array, convert with:
                     torch.tensor(np.asarray(state), dtype=torch.complex128)

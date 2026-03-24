@@ -36,6 +36,7 @@ from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn as nn
+from qgan.cost_functions import compute_cost
 
 from config import CFG
 from tools.data_managers import print_and_log
@@ -139,53 +140,17 @@ class Discriminator(nn.Module):
         return A, B, psi, phi
 
     # -- loss computation (replaces manual gradients) ---------------------------------
-    def compute_loss(self, final_target_state: torch.Tensor,
-                     final_gen_state: torch.Tensor) -> torch.Tensor:
-        """Compute the Wasserstein cost as a differentiable scalar.
-
-        Uses density matrices and torch.trace instead of brakets:
-            <psi|O|psi>= Tr[O · rho]        where rho = |psi><psi|
-            <phi|O|psi>· <psi|O'|phi>= Tr[O · rho_psi · O' · rho_phi]  (cross terms)
-
-        Loss = psi_term − phi_term − reg_term
-
-        The discriminator MAXIMISES this, so we return − Loss for
-        minimisation with optimizer.step().
-
+    def compute_loss(self, final_target_state, final_gen_state):
+        """Compute the Wasserstein loss as a differentiable scalar.
         Args:
-            final_target_state: Target state, shape (d,) or (d, 1), complex128.
-            final_gen_state: Generator state, shape (d,) or (d, 1), complex128.
-
+            final_target_state (np.ndarray): the target state to input into the Discriminator.
+            final_gen_state (np.ndarray): the gen state to input into the Discriminator.
+            config (Config): training configuration (defaults to CFG).
         Returns:
-            torch.Tensor: scalar (real), the negated loss for minimisation.
-        """
-        A, B, psi, phi = self.get_dis_matrices_rep()
-
-        # Build density matrices
-        t = final_target_state.reshape(-1)
-        g = final_gen_state.reshape(-1)
-        rho_t = torch.outer(t, t.conj())  # |target><target|
-        rho_g = torch.outer(g, g.conj())  # |gen><gen|
-
-        # psi term: Tr[psi · rho_t]
-        psi_term = torch.trace(psi @ rho_t)
-
-        # phi term: Tr[phi · rho_g]
-        phi_term = torch.trace(phi @ rho_g)
-
-        # Regularisation terms:
-        t1 = torch.trace(A @ rho_g) * torch.trace(B @ rho_t)
-        t2 = torch.trace(A @ rho_g @ B @ rho_t)
-        t3 = torch.trace(A @ rho_t @ B @ rho_g)
-        t4 = torch.trace(A @ rho_t) * torch.trace(B @ rho_g)
-        reg_term = lamb / np.e * (cst1 * t1 - cst2 * (t2 + t3) + cst3 * t4)
-
-        # Full cost (real part to avoid numerical noise)
-        cost = (psi_term - phi_term - reg_term).real
-
-        # Negate for minimisation (discriminator maximises)
-        return -cost
-
+            float: the cost function."""
+        cost = compute_cost(self, final_target_state, final_gen_state)
+        return -cost  # negate because discriminator MAXIMISES
+    
     # -- save / load ---------------------------------
     def save_model(self, file_path: str):
         """Save discriminator state to disk.
