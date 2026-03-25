@@ -14,8 +14,7 @@
 """Cost and Fidelity Functions — PyTorch version.
 
 Reduced from the original cost_functions.py:
-    - braket()       -> REMOVED (replaced by torch.trace in dis/gen compute_loss)
-    - compute_cost() -> REMOVED (now inside Discriminator.compute_loss)
+    - braket()                    -> REMOVED (replaced by torch.vdot in dis/gen compute_loss)
     - compute_fidelity()          -> kept, torch version
     - compute_fidelity_and_cost() -> kept, calls dis.compute_loss
 
@@ -26,25 +25,7 @@ provide evaluation metrics for logging during training.
 
 import torch
 import numpy as np
-
-def compute_cost(dis, final_target_state: torch.Tensor,
-                 final_gen_state: torch.Tensor) -> float:
-    """Evaluate the Wasserstein cost without computing gradients.
-
-    Convenience wrapper that calls the discriminator's compute_loss
-    (which returns −cost for optimisation) and negates it back.
-
-    Args:
-        dis: Discriminator (torch version).
-        final_target_state: Target state, shape (d,) or (d, 1).
-        final_gen_state: Generator state, shape (d,) or (d, 1).
-
-    Returns:
-        float: the Wasserstein cost.
-    """
-    with torch.no_grad():
-        neg_cost = dis.compute_loss(final_target_state, final_gen_state)
-    return float(-neg_cost)
+from config import CFG
 
 def compute_fidelity(final_target_state: torch.Tensor,
                      final_gen_state: torch.Tensor) -> float:
@@ -61,7 +42,7 @@ def compute_fidelity(final_target_state: torch.Tensor,
     """
     t = final_target_state.reshape(-1)
     g = final_gen_state.reshape(-1)
-    overlap = torch.dot(t.conj(), g)
+    overlap = torch.vdot(t, g) #better to use .vdot than .dot(t.conj(), g)
     return float(torch.abs(overlap) ** 2)
 
 def compute_fidelity_and_cost(dis, final_target_state: torch.Tensor,
@@ -77,5 +58,8 @@ def compute_fidelity_and_cost(dis, final_target_state: torch.Tensor,
         (fidelity, cost): both as floats.
     """
     fidelity = compute_fidelity(final_target_state, final_gen_state)
-    cost = compute_cost(dis, final_target_state, final_gen_state)
+    with torch.no_grad():
+        neg_cost = dis.compute_loss(final_target_state, final_gen_state)
+
+    cost = float(-neg_cost)
     return fidelity, cost

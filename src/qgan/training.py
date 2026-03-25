@@ -71,12 +71,14 @@ class Training:
         # Both are torch tensors, shape (d, 1), no gradient needed
         _, initial_state_final = get_max_entangled_state_torch(CFG.system_size)
 
-        # Target state: (I ⊗ U_target) |\Phi^+ >
+        # Target state: (I \otimes U_target) |\Phi^+ >
         # get_final_target_state returns numpy, convert to torch
-        target_np = get_final_target_state(initial_state_final.numpy())
+        target_np = get_final_target_state(initial_state_final.detach().numpy())
         self.final_target_state: torch.Tensor = torch.tensor(
             np.asarray(target_np), dtype=torch.complex128
         ).reshape(-1)
+        # Flatten to 1D for the loss functions
+        self.final_target_1d = self.final_target_state.reshape(-1)
 
         # Generator: variational quantum circuit (PennyLane + PyTorch)
         self.gen: Generator = Generator()
@@ -113,37 +115,35 @@ class Training:
             num_epochs += 1
 
             for epoch_iter in range(CFG.iterations_epoch):
-                # --- Process ancilla on current generator state
-                total_gen_state = self.gen.get_total_gen_state()
-                final_gen_state = get_final_gen_state_torch(total_gen_state)
+                # -- Detached state for discriminator 
+                with torch.no_grad():
+                    total_gen_detached = self.gen.get_total_gen_state()
+                    final_gen_detached = get_final_gen_state_torch(total_gen_detached).reshape(-1)
 
-                # Flatten to 1D for the loss functions
-                final_gen_1d = final_gen_state.reshape(-1).detach()
-                final_target_1d = self.final_target_state.reshape(-1)
-
-                # -- Discriminator steps: MAX Wasserstein distance
+                # -- Discriminator steps
                 for _ in range(CFG.steps_dis):
                     self.dis.optimizer.zero_grad()
-                    dis_loss = self.dis.compute_loss(final_target_1d, final_gen_1d)
+                    dis_loss = self.dis.compute_loss(self.final_target_1d, final_gen_detached)
                     dis_loss.backward()
                     self.dis.optimizer.step()
 
-                # -- Generator step(s): MIN Wasserstein distance
+                # -- Generator steps 
                 for _ in range(CFG.steps_gen):
                     self.gen.update_gen(self.dis, self.final_target_state)
 
-                # --- Periodically compute and save fidelity & loss
+                # -- Fidelity eval, reuse cached state from update_gen
                 if epoch_iter % CFG.save_fid_and_loss_every_x_iter == 0:
                     with torch.no_grad():
-                        total_gen_eval = self.gen.get_total_gen_state()
-                        final_gen_eval = get_final_gen_state_torch(total_gen_eval)
+                        final_gen_eval = get_final_gen_state_torch(
+                            self.gen.total_gen_state
+                        ).reshape(-1)
                     fid, loss = compute_fidelity_and_cost(
-                        self.dis, final_target_1d, final_gen_eval.reshape(-1)
+                        self.dis, self.final_target_1d, final_gen_eval
                     )
                     fidelities.append(fid)
                     losses.append(loss)
 
-                # -- Periodically log -----------------------------------
+                # -- Log
                 if epoch_iter % CFG.log_every_x_iter == 0:
                     info = (
                         f"\nepoch:{num_epochs:4d} | "

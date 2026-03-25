@@ -166,7 +166,7 @@ def _hamiltonian_to_unitary(H: qml.Hamiltonian, size: int) -> np.ndarray:
     Returns:
         np.ndarray of shape (2^size, 2^size).
     """
-    return qml.matrix(qml.exp(H, coeff=-1j), wire_order=range(size))
+    return qml.matrix(qml.exp(H, coeff=-1j* CFG.time_to_evolve), wire_order=range(size))
 
 
 # -- PREDEFINED HAMILTONIANS ------------------------
