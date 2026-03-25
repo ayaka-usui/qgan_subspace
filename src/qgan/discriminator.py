@@ -36,8 +36,6 @@ from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn as nn
-from qgan.cost_functions import compute_cost
-
 from config import CFG
 from tools.data_managers import print_and_log
 
@@ -140,16 +138,32 @@ class Discriminator(nn.Module):
         return A, B, psi, phi
 
     # -- loss computation (replaces manual gradients) ---------------------------------
-    def compute_loss(self, final_target_state, final_gen_state):
-        """Compute the Wasserstein loss as a differentiable scalar.
-        Args:
-            final_target_state (np.ndarray): the target state to input into the Discriminator.
-            final_gen_state (np.ndarray): the gen state to input into the Discriminator.
-            config (Config): training configuration (defaults to CFG).
-        Returns:
-            float: the cost function."""
-        cost = compute_cost(self, final_target_state, final_gen_state)
-        return -cost  # negate because discriminator MAXIMISES
+    def compute_loss(self, final_target_state: torch.Tensor,
+                     final_gen_state: torch.Tensor) -> torch.Tensor:
+        """Compute the Wasserstein loss as a differentiable scalar."""
+        A, B, psi, phi = self.get_dis_matrices_rep()
+
+        g = final_gen_state.reshape(-1)
+        t = final_target_state.reshape(-1)
+
+        Ag = A @ g;  Bg = B @ g;  At = A @ t;  Bt = B @ t
+        term1 = torch.vdot(g, Ag)
+        term2 = torch.vdot(t, Bt)
+        term3 = torch.vdot(Bg, t)
+        term4 = torch.vdot(t, Ag)
+        term5 = torch.vdot(Ag, t)
+        term6 = torch.vdot(t, Bg)
+        term7 = torch.vdot(Bg, g)
+        term8 = torch.vdot(t, At)
+        psiterm = torch.vdot(t, psi @ t)
+        phiterm = torch.vdot(g, phi @ g)
+        regterm = (CFG.lamb / np.e) * (
+            CFG.cst1 * term1 * term2
+            - CFG.cst2 * (term3 * term4 + term5 * term6)
+            + CFG.cst3 * term7 * term8
+        )
+        loss = (psiterm - phiterm - regterm).real
+        return -loss
     
     # -- save / load ---------------------------------
     def save_model(self, file_path: str):

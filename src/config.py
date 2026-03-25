@@ -30,15 +30,15 @@ class Config:
         # -- Run mode ----------------------------
         # Single run or multiple experiments with optional shared initial plateaus.
 
-        self.run_multiple_experiments: bool = False
-        self.common_initial_plateaus: bool = False
+        self.run_multiple_experiments: bool = True
+        self.common_initial_plateaus: bool = True
 
         # If common_initial_plateaus:
-        self.N_initial_plateaus: int = 5
+        self.N_initial_plateaus: int = 3
         self.N_reps_each_init_plateau: int = 1
 
         # If not common_initial_plateaus:
-        self.N_reps_if_from_scratch: int = 5
+        self.N_reps_if_from_scratch: int = 1
 
         # Configurations to compare (each dict overrides CFG attributes):
         self.reps_new_config: list[dict[str, Any]] = [
@@ -101,7 +101,7 @@ class Config:
         #   trace   : trace out ancilla, sample pure state
 
         self.system_size: int = 3
-        self.extra_ancilla: bool = True # We begin with no extra qubits, but we add once we reach the Plateau
+        self.extra_ancilla: bool = False # We begin with no extra qubits, but we add once we reach the Plateau
         # Ancilla mode define what happens to the ancilla before Discriminator (ancilla.py)
         self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "pass" 
         self.ancilla_project_norm: Optional[Literal["re-norm", "pass"]] = "re-norm"
@@ -131,7 +131,7 @@ class Config:
         # Predefined: cluster_h, ising_h, rotated_surface_h (squared qubits only)
         # Custom: specify terms and strengths.
         #   Available: I, X, Y, Z, XX, XZ, ZZ, ZZZ, ZZZZ, XZX, XXXX
-
+        self.time_to_evolve: float = 1.0  # Time to evolve with the Hamiltonian, for the target state preparation.
         self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "ising_h", "custom_h"] = "custom_h"
         self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ"]
         self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0]
@@ -195,6 +195,7 @@ class Config:
             f"gen_ansatz: {self.gen_ansatz}\n"
             f"custom_ansatz_terms: {self.custom_ansatz_terms}\n"
             f"{sep}\n"
+            f"time_to_evolve: {self.time_to_evolve},\n"
             f"target_hamiltonian: {self.target_hamiltonian}\n"
             f"custom_hamiltonian_terms: {self.custom_hamiltonian_terms}\n"
             f"custom_hamiltonian_strengths: {self.custom_hamiltonian_strengths}\n"

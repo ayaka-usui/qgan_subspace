@@ -39,7 +39,6 @@ import pennylane as qml
 from config import CFG
 from tools.data_managers import print_and_log
 from qgan.ancilla import get_final_gen_state_torch
-from qgan.cost_functions import compute_cost
 
 # Wasserstein cost constants from config
 cst1, cst2, cst3, lamb = CFG.cst1, CFG.cst2, CFG.cst3, CFG.lamb
