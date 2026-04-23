@@ -334,9 +334,9 @@ def collect_fidelities_by_plateau_for_run(base_path, run_idx):
             continue
         if "log_fidelity_loss.txt" not in files:
             continue
-        # Quick filter: must contain the run marker
+        # Precise filter: must contain the exact run folder
         run_marker = f"repeated_changed_run{run_idx}"
-        if run_marker not in root:
+        if f"/{run_marker}/" not in root.replace("\\", "/"):
             continue
         # Must be inside an initial_plateau_<P>
         m_plateau = re.search(r"initial_plateau_(\d+)", root)
