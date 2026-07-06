@@ -127,6 +127,9 @@ class Config:
         #
         #   - max_fidelity: Stopping criterion for fidelity (default: ~0.99)
         #
+        #   - compute_ancilla_entropy: Whether to compute the ancilla entanglement entropy at each iteration
+        #       and display it in the live iteration plots (only meaningful when `extra_ancilla` is enabled).
+        #
         #   - steps_gen/dis: Discriminator (first) and Generator (second) update steps in each iter (1~5).
         #
         #############################################################################################
@@ -135,6 +138,7 @@ class Config:
         self.save_fid_and_loss_every_x_iter: int = 1
         self.log_every_x_iter: int = 10  # This needs to be a multiple of save_fid_and_loss_every_x_iter
         self.max_fidelity: float = 0.99
+        self.compute_ancilla_entropy: bool = False
         self.steps_dis: int = 1
         self.steps_gen: int = 1
 
@@ -283,6 +287,7 @@ class Config:
         self.model_dis_path: str = f"{self.base_data_path}/saved_model/model-dis(hs).pkl"
         self.log_path: str = f"{self.base_data_path}/logs/log.txt"
         self.fid_loss_path: str = f"{self.base_data_path}/fidelities/log_fidelity_loss.txt"
+        self.entropy_path: str = f"{self.base_data_path}/fidelities/log_entropy.txt"
         self.gen_final_params_path: str = f"{self.base_data_path}/gen_final_params/gen_final_params.txt"
 
     def show_data(self) -> str:
@@ -317,6 +322,7 @@ class Config:
             f"log_every_x_iter: {self.log_every_x_iter},\n"
             f"save_fid_and_loss_every_x_iter: {self.save_fid_and_loss_every_x_iter},\n"
             f"max_fidelity: {self.max_fidelity},\n"
+            f"compute_ancilla_entropy: {self.compute_ancilla_entropy},\n"
             f"steps_dis: {self.steps_dis},\n"
             f"steps_gen: {self.steps_gen},\n"
             "----------------------------------------------\n"

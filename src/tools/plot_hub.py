@@ -60,8 +60,16 @@ def generate_all_plots(
 ########################################################################
 # REAL TIME RUN PLOTTING FUNCTION
 ########################################################################
-def plt_fidelity_vs_iter(fidelities, losses, config, indx=0):
-    fig, (axs1, axs2) = plt.subplots(1, 2)
+def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
+    show_entropy = (
+        bool(getattr(config, "compute_ancilla_entropy", False)) and entropies is not None and len(entropies) > 0
+    )
+    n_panels = 3 if show_entropy else 2
+    fig, axs = plt.subplots(1, n_panels, figsize=(5 * n_panels, 4))
+    if n_panels == 2:
+        axs1, axs2 = axs
+    else:
+        axs1, axs2, axs3 = axs
     axs1.plot(range(len(fidelities)), fidelities)
     axs1.set_xlabel("Iteration")
     axs1.set_ylabel("Fidelity")
@@ -70,6 +78,11 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0):
     axs2.set_xlabel("Iteration")
     axs2.set_ylabel("Loss")
     axs2.set_title("Wasserstein Loss vs Iterations")
+    if show_entropy:
+        axs3.plot(range(len(entropies)), entropies)
+        axs3.set_xlabel("Iteration")
+        axs3.set_ylabel("Entropy")
+        axs3.set_title("Ancilla Entanglement Entropy vs Iterations")
     plt.tight_layout()
 
     # Save the figure
