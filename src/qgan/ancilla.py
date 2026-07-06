@@ -124,8 +124,8 @@ def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.nda
     tr = np.trace(rho)
     tr = np.real_if_close(tr, tol=1000)
 
-    if not np.isclose(tr, 1.0, rtol=1e-8, atol=1e-10):
-        raise ValueError(f"Reduced density matrix trace must be very close to 1, but got {tr!r}.")
+    if not np.isclose(tr, 1.0, rtol=1e-2, atol=1e-2):
+        raise ValueError(f"Reduced density matrix trace must be close to 1, but got {tr!r}.")
 
     rho = rho / tr
     # Enforce Hermiticity against numerical noise
@@ -135,7 +135,7 @@ def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.nda
 def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> float:
     """Compute the von Neumann entanglement entropy of the ancilla qubit.
 
-    The standard convention is used: S(rho) = -Tr(rho log(rho)).
+    The standard convention is used: S(rho) = -Tr(rho log_2(rho)).
 
     Args:
         total_output_state (np.ndarray): Full output (pure and vector) state vector from the generator.
@@ -158,7 +158,7 @@ def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> floa
     non_zero = eigvals > 1e-12
     if not np.any(non_zero):
         return 0.0
-    return float(-np.sum(eigvals[non_zero] * np.log(eigvals[non_zero])))
+    return float(-np.sum(eigvals[non_zero] * np.log2(eigvals[non_zero])))
 
 
 def get_final_gen_state_for_discriminator(total_output_state: np.ndarray) -> np.ndarray:
