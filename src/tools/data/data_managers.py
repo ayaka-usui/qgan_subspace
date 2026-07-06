@@ -49,7 +49,7 @@ def save_model(model, file_path):
         pickle.dump(model, file)
 
 
-def save_fidelity_loss(fidelities_history, losses_history, file_path, entropies_history=None):
+def save_fidelity_loss(fidelities_history, losses_history, file_path):
     if os.path.exists(file_path):
         os.remove(file_path)
     os.makedirs(os.path.dirname(file_path), exist_ok=True)

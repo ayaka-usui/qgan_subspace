@@ -120,7 +120,12 @@ def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.nda
         raise ValueError("The total output state dimension must be even to trace out the ancilla qubit.")
 
     reshaped = state.reshape(-1, 2)
-    return reshaped.conj().T @ reshaped
+    rho = reshaped.conj().T @ reshaped
+    tr = np.trace(rho)
+    if tr != 0:
+        rho = rho / tr
+    # Enforce Hermiticity against numerical noise
+    return (rho + rho.conj().T) / 2
 
 
 def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> float:
