@@ -122,8 +122,12 @@ def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.nda
     reshaped = state.reshape(-1, 2)
     rho = reshaped.conj().T @ reshaped
     tr = np.trace(rho)
-    if tr != 0:
-        rho = rho / tr
+    tr = np.real_if_close(tr, tol=1000)
+
+    if not np.isclose(tr, 1.0, rtol=1e-8, atol=1e-10):
+        raise ValueError(f"Reduced density matrix trace must be very close to 1, but got {tr!r}.")
+
+    rho = rho / tr
     # Enforce Hermiticity against numerical noise
     return (rho + rho.conj().T) / 2
 
