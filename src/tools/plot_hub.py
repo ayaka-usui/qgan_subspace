@@ -94,7 +94,10 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
     )
 
     ax_left.set_xlabel("Iteration")
-    ax_left.set_ylabel("Fidelity / Entanglement entropy")
+    if show_entropy:
+        ax_left.set_ylabel("Fidelity / Entanglement entropy")
+    else:
+        ax_left.set_ylabel("Fidelity")
     ax_right.set_ylabel("Loss")
     ax_left.set_ylim(0, 1)
     ax_left.set_title("Fidelity, Entanglement Entropy, and Loss vs Iterations")

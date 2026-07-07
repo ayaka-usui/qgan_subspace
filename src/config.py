@@ -54,7 +54,7 @@ class Config:
         self.run_multiple_experiments: bool = True
         self.common_initial_plateaus: bool = True
         # If common_initial_plateaus == true:
-        self.N_initial_plateaus: int = 11
+        self.N_initial_plateaus: int = 100
         self.N_reps_each_init_plateau: int = 1
         # If common_initial_plateaus == false:
         self.N_reps_if_from_scratch: int = 100
@@ -63,27 +63,27 @@ class Config:
             {
                 "extra_ancilla": True,
                 "ancilla_mode": "pass",
-                "ancilla_topology": "total",
-                "ancilla_connect_to": None,
-                "do_ancilla_1q_gates": True,
-                "start_ancilla_gates_randomly": True,
-            },
-            {
-                "extra_ancilla": True,
-                "ancilla_mode": "pass",
-                "ancilla_topology": "total",
+                "ancilla_topology": "ansatz",
                 "ancilla_connect_to": None,
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": False,
             },
-            # {
-            #     "extra_ancilla": True,
-            #     "ancilla_mode": "pass",
-            #     "ancilla_topology": "bridge",
-            #     "ancilla_connect_to": None,
-            #     "do_ancilla_1q_gates": False,
-            #     "start_ancilla_gates_randomly": False,
-            # },
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "bridge",
+                "ancilla_connect_to": 1,
+                "do_ancilla_1q_gates": True,
+                "start_ancilla_gates_randomly": False,
+            },
+            {
+                "extra_ancilla": True,
+                "ancilla_mode": "pass",
+                "ancilla_topology": "bridge",
+                "ancilla_connect_to": None,
+                "do_ancilla_1q_gates": False,
+                "start_ancilla_gates_randomly": False,
+            },
             # {"extra_ancilla": True, "ancilla_topology": "bridge", "target_hamiltonian": "ising_h"},
             # Add more configs here for comparison
         ]
@@ -138,7 +138,7 @@ class Config:
         self.save_fid_and_loss_every_x_iter: int = 1
         self.log_every_x_iter: int = 10  # This needs to be a multiple of save_fid_and_loss_every_x_iter
         self.max_fidelity: float = 0.99
-        self.compute_ancilla_entropy: bool = True
+        self.compute_ancilla_entropy: bool = False
         self.steps_dis: int = 1
         self.steps_gen: int = 1
 
@@ -214,7 +214,7 @@ class Config:
         #############################################################################################
         self.gen_layers: int = 3  # 2, 3, 5, 10, 20 ...
         self.gen_ansatz: Literal["ZZ_YY_XX_Z", "ZZ_Z_X", "custom"] = "custom"
-        self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "X", "Y", "Z"]  # "X", "Y", "Z", "XX", "ZZ", "YY"
+        self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "XX", "Y", "X"]  # "X", "Y", "Z", "XX", "ZZ", "YY"
 
         #############################################################################################
         # ---------------------

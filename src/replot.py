@@ -24,17 +24,15 @@ from tools.plot_hub import find_if_common_initial_plateaus, generate_all_plots
 #######################################################################
 
 # EXAMPLE TO EDIT PARAMETERS:
-time_stamp_to_replot = "good_data/POST_TFM_DATA/2025-07-28__15-38-23-Diff-ancilla-topologies-from-start [DONE] REORDER" 
+time_stamp_to_replot = "2025-08-06__00-23-46" 
 max_fidelity = 0.99
 x_label = "Ancilla Topology"
 run_names = [
-    "Control",
     "Ansatz",
     "Bridge No1Q",
     "Short Bridge",
     "Bridge",
     "Total",
-    "Fake",
 ]
 # STOP EDITING HERE
 
@@ -43,7 +41,7 @@ run_names = [
 # Replotting script for the specified experiment
 #######################################################################
 # Path to the experiment folder
-base_path = os.path.join("previous_data", time_stamp_to_replot)
+base_path = os.path.join("generated_data", time_stamp_to_replot)
 log_path = os.path.join(base_path, "replot_log.txt")
 
 # Extract the number of runs and whether there are common initial plateaus
