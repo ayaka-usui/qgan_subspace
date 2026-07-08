@@ -103,6 +103,64 @@ def trace_out_ancilla(state: np.ndarray) -> np.ndarray:
     return np.asmatrix(sampled_state.reshape(-1, 1))
 
 
+def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.ndarray:
+    """Return the reduced density matrix of the last qubit (ancilla).
+
+    The input state is assumed to be a pure state vector for the full system,
+    with the ancilla stored as the last qubit.
+
+    Args:
+        total_output_state (np.ndarray): Full output (pure and vector) state vector from the generator.
+
+    Returns:
+        np.ndarray: The 2x2 reduced density matrix of the ancilla.
+    """
+    state = np.asarray(total_output_state).flatten()
+    if state.size % 2 != 0:
+        raise ValueError("The total output state dimension must be even to trace out the ancilla qubit.")
+
+    reshaped = state.reshape(-1, 2)
+    rho = reshaped.conj().T @ reshaped
+    tr = np.trace(rho)
+    tr = np.real_if_close(tr, tol=1000)
+
+    if not np.isclose(tr, 1.0, rtol=1e-2, atol=1e-2):
+        raise ValueError(f"Reduced density matrix trace must be close to 1, but got {tr!r}.")
+
+    rho = rho / tr
+    # Enforce Hermiticity against numerical noise
+    return (rho + rho.conj().T) / 2
+
+
+def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> float:
+    """Compute the von Neumann entanglement entropy of the ancilla qubit.
+
+    The standard convention is used: S(rho) = -Tr(rho log_2(rho)).
+
+    Args:
+        total_output_state (np.ndarray): Full output (pure and vector) state vector from the generator.
+
+    Returns:
+        float: Entanglement entropy of the ancilla.
+
+    Raises:
+        ValueError: If eigenvalues fall outside the valid range [0, 1].
+    """
+    rho_ancilla = get_ancilla_reduced_density_matrix(total_output_state)
+    eigvals = np.real(np.linalg.eigvalsh(rho_ancilla))
+
+    # Check eigenvalues are in valid range [0, 1]
+    if np.any(eigvals < -1e-10) or np.any(eigvals > 1.0 + 1e-10):
+        raise ValueError(f"Eigenvalues of reduced density matrix must be in [0, 1], but got: {eigvals}")
+
+    # Clamp to valid range to handle floating point errors near boundaries
+    eigvals = np.clip(eigvals, 0.0, 1.0)
+    non_zero = eigvals > 1e-12
+    if not np.any(non_zero):
+        return 0.0
+    return float(-np.sum(eigvals[non_zero] * np.log2(eigvals[non_zero])))
+
+
 def get_final_gen_state_for_discriminator(total_output_state: np.ndarray) -> np.ndarray:
     """Modifies the gen state to be passed to the discriminator, according to ancilla_mode.
 
