@@ -60,16 +60,52 @@ def generate_all_plots(
 ########################################################################
 # REAL TIME RUN PLOTTING FUNCTION
 ########################################################################
-def plt_fidelity_vs_iter(fidelities, losses, config, indx=0):
-    fig, (axs1, axs2) = plt.subplots(1, 2)
-    axs1.plot(range(len(fidelities)), fidelities)
-    axs1.set_xlabel("Iteration")
-    axs1.set_ylabel("Fidelity")
-    axs1.set_title("Fidelity <target|gen> vs Iterations")
-    axs2.plot(range(len(losses)), losses)
-    axs2.set_xlabel("Iteration")
-    axs2.set_ylabel("Loss")
-    axs2.set_title("Wasserstein Loss vs Iterations")
+def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
+    show_entropy = (
+        bool(getattr(config, "compute_ancilla_entropy", False)) and entropies is not None and len(entropies) > 0
+    )
+    fig, ax_left = plt.subplots(figsize=(8, 5))
+    ax_right = ax_left.twinx()
+
+    fid_line = ax_left.plot(
+        range(len(fidelities)),
+        fidelities,
+        color="tab:blue",
+        label="Fidelity",
+        linewidth=2,
+    )
+    if show_entropy:
+        ent_line = ax_left.plot(
+            range(len(entropies)),
+            entropies,
+            color="tab:green",
+            label="Entanglement entropy",
+            linewidth=2,
+        )
+    else:
+        ent_line = []
+
+    loss_line = ax_right.plot(
+        range(len(losses)),
+        losses,
+        color="tab:red",
+        label="Loss",
+        linewidth=2,
+    )
+
+    ax_left.set_xlabel("Iteration")
+    if show_entropy:
+        ax_left.set_ylabel("Fidelity / Entanglement entropy")
+    else:
+        ax_left.set_ylabel("Fidelity")
+    ax_right.set_ylabel("Loss")
+    ax_left.set_ylim(0, 1)
+    ax_left.set_title("Fidelity, Entanglement Entropy, and Loss vs Iterations")
+
+    lines = fid_line + ent_line + loss_line
+    labels = [line.get_label() for line in lines]
+    ax_left.legend(lines, labels, loc="best")
+    ax_left.grid(True, alpha=0.3)
     plt.tight_layout()
 
     # Save the figure

@@ -28,6 +28,7 @@ from qgan.generator import Generator
 from qgan.target import get_final_target_state
 from tools.data.data_managers import (
     print_and_log,
+    save_entropy,
     save_fidelity_loss,
     save_gen_final_params,
     save_model,
@@ -65,7 +66,7 @@ class Training:
         # Load models if specified (only the params, and only if compatible)
         load_models_if_specified(self)
 
-        fidelities_history, losses_history = [], []
+        fidelities_history, losses_history, entropy_history = [], [], []
         starttime = datetime.now()
         num_epochs: int = 0
 
@@ -76,6 +77,7 @@ class Training:
             # while (f < 0.95):
             fidelities = []
             losses = []
+            entropies = []
             num_epochs += 1
             for epoch_iter in range(CFG.iterations_epoch):
                 ###########################################################
@@ -89,19 +91,24 @@ class Training:
                     self.gen.update_gen(self.dis, self.final_target_state)
 
                 ###########################################################
-                # Every X iterations: compute and save fidelity & loss
+                # Every X iterations: compute and save fidelity, loss, and entropy
                 ###########################################################
                 if epoch_iter % CFG.save_fid_and_loss_every_x_iter == 0:
                     fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, self.gen.total_gen_state)
                     fidelities.append(fid), losses.append(loss)
+                    if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
+                        entropy = compute_ancilla_entanglement_entropy(self.gen.total_gen_state)
+                        entropies.append(entropy)
 
                 ############################################################
-                # Every X iterations: Print and log fidelity and loss
+                # Every X iterations: Print and log fidelity, loss, and entropy
                 ############################################################
                 if epoch_iter % CFG.log_every_x_iter == 0:
                     info = "\nepoch:{:4d} | iters:{:4d} | fidelity:{:8f} | loss:{:8f}".format(
                         num_epochs, epoch_iter + 1, round(fid, 6), round(loss, 6)
                     )
+                    if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
+                        info += " | entropy:{:8f}".format(round(entropies[-1], 6))
                     print_and_log(info, CFG.log_path)
 
             ###########################################################
@@ -109,7 +116,11 @@ class Training:
             ###########################################################
             fidelities_history = np.append(fidelities_history, fidelities)
             losses_history = np.append(losses_history, losses)
-            plt_fidelity_vs_iter(fidelities_history, losses_history, CFG, num_epochs)
+            if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
+                entropy_history = np.append(entropy_history, entropies)
+            else:
+                entropy_history = None
+            plt_fidelity_vs_iter(fidelities_history, losses_history, CFG, num_epochs, entropy_history)
 
             #############################################################
             # Stopping conditions
@@ -132,6 +143,9 @@ class Training:
         ###########################################################
         # Save data of fidelity and loss
         save_fidelity_loss(fidelities_history, losses_history, CFG.fid_loss_path)
+        # Save entropy if available
+        if CFG.compute_ancilla_entropy and CFG.extra_ancilla and entropy_history is not None:
+            save_entropy(entropy_history, CFG.entropy_path)
 
         # Save data of the generator and the discriminator
         save_model(self.gen, CFG.model_gen_path)

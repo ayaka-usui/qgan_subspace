@@ -58,6 +58,22 @@ def save_fidelity_loss(fidelities_history, losses_history, file_path):
         np.savetxt(f, losses_history)
 
 
+def save_entropy(entropies_history, file_path):
+    """Save entropy history to a file.
+
+    Args:
+        entropies_history: Array of entropy values.
+        file_path: Path to save the entropy data.
+    """
+    if entropies_history is None or len(entropies_history) == 0:
+        return
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "wb") as f:
+        np.savetxt(f, entropies_history)
+
+
 def save_gen_final_params(gen, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     array_angle = np.zeros(len(gen.qc.gates))
