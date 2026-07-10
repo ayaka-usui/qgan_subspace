@@ -19,7 +19,7 @@ import numpy as np
 
 from config import CFG
 from qgan.ancilla import (
-    get_final_gen_state_for_discriminator,
+    compute_ancilla_entanglement_entropy,
     get_max_entangled_state_with_ancilla_if_needed,
 )
 from qgan.cost_functions import compute_fidelity_and_cost
@@ -81,11 +81,9 @@ class Training:
                 ###########################################################
                 # Dis and Gen gradient descent
                 ###########################################################
-                # Remove ancilla if needed, with ancilla mode, before discriminator:
-                final_gen_state = get_final_gen_state_for_discriminator(self.gen.total_gen_state)
 
                 for _ in range(CFG.steps_dis):
-                    self.dis.update_dis(self.final_target_state, final_gen_state)
+                    self.dis.update_dis(self.final_target_state, self.gen.total_gen_state)
 
                 for _ in range(CFG.steps_gen):
                     self.gen.update_gen(self.dis, self.final_target_state)
@@ -94,7 +92,7 @@ class Training:
                 # Every X iterations: compute and save fidelity & loss
                 ###########################################################
                 if epoch_iter % CFG.save_fid_and_loss_every_x_iter == 0:
-                    fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, final_gen_state)
+                    fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, self.gen.total_gen_state)
                     fidelities.append(fid), losses.append(loss)
 
                 ############################################################

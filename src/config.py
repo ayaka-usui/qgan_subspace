@@ -62,7 +62,6 @@ class Config:
         self.reps_new_config: list[dict[str, Any]] = [
             {
                 "extra_ancilla": True,
-                "ancilla_mode": "pass",
                 "ancilla_topology": "ansatz",
                 "ancilla_connect_to": None,
                 "do_ancilla_1q_gates": True,
@@ -70,7 +69,6 @@ class Config:
             },
             {
                 "extra_ancilla": True,
-                "ancilla_mode": "pass",
                 "ancilla_topology": "bridge",
                 "ancilla_connect_to": 1,
                 "do_ancilla_1q_gates": True,
@@ -78,7 +76,6 @@ class Config:
             },
             {
                 "extra_ancilla": True,
-                "ancilla_mode": "pass",
                 "ancilla_topology": "bridge",
                 "ancilla_connect_to": None,
                 "do_ancilla_1q_gates": False,
@@ -146,15 +143,6 @@ class Config:
         #
         #   - extra_ancilla: Whether to include an extra ancilla.
         #
-        #   - ancilla_mode: How ancilla is handled, between gen to dis.
-        #       + "pass": Pass the ancilla qubit to the discriminator, after passes through gen.
-        #       + "project": Project the ancilla qubit to the |0> state after gen (doesn't arrive to dis).
-        #       + "trace": Trace out the ancilla qubit after gen (doesn't arrive to dis).
-        #
-        #   - ancilla_project_norm: How to handle the ancilla norm after projection:
-        #       + "re-norm": Re-normalize after project (losses norm info, easier train, less effective Ham).
-        #       + "pass": Pass state with its norm after project (keeps norm info, harder train, more effective Ham).
-        #
         #   - ancilla_topology: Topology for the ancilla connections:
         #           |-----------------|-------------------|---------------------|----------------------|
         #           |  "disconnected" |      "ansatz"     |       "bridge"      |        "total"       |
@@ -184,8 +172,6 @@ class Config:
         ###############################################################################################
         self.system_size: int = 3
         self.extra_ancilla: bool = False
-        self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "pass"
-        self.ancilla_project_norm: Optional[Literal["re-norm", "pass"]] = "re-norm"
         self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "bridge"
         self.ancilla_connect_to: Optional[int] = None  # None means connected to last one, otherwise to the specified.
         self.do_ancilla_1q_gates: bool = True  # Whether to include 1-qubit gates for ancilla qubit.
@@ -217,6 +203,7 @@ class Config:
         # TARGET CONFIGURATION
         # ---------------------
         #   - time_to_evolve: Time t to evolve with the Hamiltonian exp^(-iHt), for the target state preparation (default: 1.0).
+        #
         #   - target_hamiltonian: Target Hamiltonian type:
         #       + "cluster_h": Cluster Hamiltonian (default).
         #       + "rotated_surface_h": Rotated surface code (only for squared sizes: 4, 9, 16...).
@@ -297,8 +284,6 @@ class Config:
             "----------------------------------------------\n"
             f"system_size: {self.system_size},\n"
             f"extra_ancilla: {self.extra_ancilla},\n"
-            f"ancilla_mode: {self.ancilla_mode},\n"
-            f"ancilla_project_norm: {self.ancilla_project_norm},\n"
             f"ancilla_topology: {self.ancilla_topology},\n"
             f"ancilla_connect_to: {self.ancilla_connect_to},\n"
             f"do_ancilla_1q_gates: {self.do_ancilla_1q_gates},\n"
