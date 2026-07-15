@@ -25,7 +25,7 @@ def get_max_entangled_state_with_ancilla_if_needed(size: int) -> np.ndarray:
         size (int): the size of the system.
 
     Returns:
-        tuple[np.ndarray]: the maximally entangled states, plus ancilla if needed for generation and target.
+        np.matrix: the maximally entangled state, plus ancilla if needed.
     """
     # Generate the maximally entangled state for the system size
     state = np.zeros(2 ** (2 * size), dtype=complex)
@@ -37,11 +37,9 @@ def get_max_entangled_state_with_ancilla_if_needed(size: int) -> np.ndarray:
     # Add ancilla qubit at the end, if needed
     initial_state_with_ancilla = np.kron(state, np.array([1, 0], dtype=complex))
 
-    # Different conditions for gen and target:
-    initial_state_for_gen = initial_state_with_ancilla if CFG.extra_ancilla else state
-    initial_state_for_target = initial_state_with_ancilla if CFG.extra_ancilla else state
+    initial_state = initial_state_with_ancilla if CFG.extra_ancilla else state
 
-    return np.asmatrix(initial_state_for_gen).T, np.asmatrix(initial_state_for_target).T
+    return np.asmatrix(initial_state).T
 
 
 def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.ndarray:
@@ -58,7 +56,9 @@ def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.nda
     """
     state = np.asarray(total_output_state).flatten()
     if state.size % 2 != 0:
-        raise ValueError("The total output state dimension must be even to trace out the ancilla qubit.")
+        raise ValueError(
+            "The total output state dimension must be even to trace out the ancilla qubit."
+        )
 
     reshaped = state.reshape(-1, 2)
     rho = reshaped.conj().T @ reshaped
@@ -66,7 +66,9 @@ def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.nda
     tr = np.real_if_close(tr, tol=1000)
 
     if not np.isclose(tr, 1.0, rtol=1e-2, atol=1e-2):
-        raise ValueError(f"Reduced density matrix trace must be close to 1, but got {tr!r}.")
+        raise ValueError(
+            f"Reduced density matrix trace must be close to 1, but got {tr!r}."
+        )
 
     rho = rho / tr
     # Enforce Hermiticity against numerical noise
@@ -92,7 +94,9 @@ def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> floa
 
     # Check eigenvalues are in valid range [0, 1]
     if np.any(eigvals < -1e-10) or np.any(eigvals > 1.0 + 1e-10):
-        raise ValueError(f"Eigenvalues of reduced density matrix must be in [0, 1], but got: {eigvals}")
+        raise ValueError(
+            f"Eigenvalues of reduced density matrix must be in [0, 1], but got: {eigvals}"
+        )
 
     # Clamp to valid range to handle floating point errors near boundaries
     eigvals = np.clip(eigvals, 0.0, 1.0)

@@ -43,13 +43,13 @@ class Training:
     def __init__(self):
         """Builds the configuration for the Training. You might wanna comment/discomment lines, for changing the model."""
 
-        initial_state_total, initial_state_final = get_max_entangled_state_with_ancilla_if_needed(CFG.system_size)
+        initial_state = get_max_entangled_state_with_ancilla_if_needed(CFG.system_size)
         """Preparation of max. entgl. state with ancilla qubit if needed, to generate state."""
 
-        self.final_target_state: np.matrix = get_final_target_state(initial_state_final)
+        self.final_target_state: np.matrix = get_final_target_state(initial_state)
         """Prepare the target state to compare in the Dis, with the size and Target unitary defined in config."""
 
-        self.gen: Generator = Generator(initial_state_total)
+        self.gen: Generator = Generator(initial_state)
         """Prepares the Generator with the size, ansatz, layers and ancilla, defined in config."""
 
         self.dis: Discriminator = Discriminator()
