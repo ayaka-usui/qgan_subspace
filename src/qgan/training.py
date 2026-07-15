@@ -20,7 +20,6 @@ import numpy as np
 from config import CFG
 from qgan.ancilla import (
     compute_ancilla_entanglement_entropy,
-    get_final_gen_state_for_discriminator,
     get_max_entangled_state_with_ancilla_if_needed,
 )
 from qgan.cost_functions import compute_fidelity_and_cost
@@ -44,13 +43,13 @@ class Training:
     def __init__(self):
         """Builds the configuration for the Training. You might wanna comment/discomment lines, for changing the model."""
 
-        initial_state_total, initial_state_final = get_max_entangled_state_with_ancilla_if_needed(CFG.system_size)
+        initial_state = get_max_entangled_state_with_ancilla_if_needed(CFG.system_size)
         """Preparation of max. entgl. state with ancilla qubit if needed, to generate state."""
 
-        self.final_target_state: np.matrix = get_final_target_state(initial_state_final)
+        self.final_target_state: np.matrix = get_final_target_state(initial_state)
         """Prepare the target state to compare in the Dis, with the size and Target unitary defined in config."""
 
-        self.gen: Generator = Generator(initial_state_total)
+        self.gen: Generator = Generator(initial_state)
         """Prepares the Generator with the size, ansatz, layers and ancilla, defined in config."""
 
         self.dis: Discriminator = Discriminator()
@@ -84,11 +83,9 @@ class Training:
                 ###########################################################
                 # Dis and Gen gradient descent
                 ###########################################################
-                # Remove ancilla if needed, with ancilla mode, before discriminator:
-                final_gen_state = get_final_gen_state_for_discriminator(self.gen.total_gen_state)
 
                 for _ in range(CFG.steps_dis):
-                    self.dis.update_dis(self.final_target_state, final_gen_state)
+                    self.dis.update_dis(self.final_target_state, self.gen.total_gen_state)
 
                 for _ in range(CFG.steps_gen):
                     self.gen.update_gen(self.dis, self.final_target_state)
@@ -97,8 +94,7 @@ class Training:
                 # Every X iterations: compute and save fidelity, loss, and entropy
                 ###########################################################
                 if epoch_iter % CFG.save_fid_and_loss_every_x_iter == 0:
-                    final_gen_state = get_final_gen_state_for_discriminator(self.gen.total_gen_state)
-                    fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, final_gen_state)
+                    fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, self.gen.total_gen_state)
                     fidelities.append(fid), losses.append(loss)
                     if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
                         entropy = compute_ancilla_entanglement_entropy(self.gen.total_gen_state)

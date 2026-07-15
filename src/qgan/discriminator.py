@@ -51,7 +51,7 @@ class Discriminator:
 
     def __init__(self):
         # Set the general used parameters:
-        self.size: int = CFG.system_size * 2 + (1 if CFG.extra_ancilla and CFG.ancilla_mode == "pass" else 0)
+        self.size: int = CFG.system_size * 2 + (1 if CFG.extra_ancilla else 0)
         self.herm: list = [I, X, Y, Z]
         self._init_params_alpha_beta()
         self.optimizer_psi: MomentumOptimizer = MomentumOptimizer()
@@ -59,7 +59,6 @@ class Discriminator:
 
         # Set params, for comparison when loading:
         self.ancilla: bool = CFG.extra_ancilla
-        self.ancilla_mode: str = CFG.ancilla_mode  # Topology doesn't matter, its not a circuit = fully connect matrix.
         self.target_size: int = CFG.system_size
         self.target_hamiltonian: str = CFG.target_hamiltonian
 
@@ -336,7 +335,9 @@ class Discriminator:
 
         # This one could work, but it wouldn't make sense, since the discriminator would be useless, better to stop:
         if saved_dis.target_hamiltonian != self.target_hamiltonian:
-            print_and_log("ERROR: Saved discriminator model is incompatible (target hamiltonian mismatch).\n", CFG.log_path)
+            print_and_log(
+                "ERROR: Saved discriminator model is incompatible (target hamiltonian mismatch).\n", CFG.log_path
+            )
             cant_load = True
 
         if cant_load:

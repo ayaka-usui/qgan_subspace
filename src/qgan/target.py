@@ -60,7 +60,7 @@ def get_final_target_state(final_input_state: np.ndarray) -> np.ndarray:
     target_unitary = get_target_unitary(CFG.target_hamiltonian, CFG.system_size)
 
     target_op = np.kron(Identity(CFG.system_size), target_unitary)
-    if CFG.extra_ancilla and CFG.ancilla_mode == "pass":
+    if CFG.extra_ancilla:
         target_op = np.kron(target_op, Identity(1))
     return np.matmul(target_op, final_input_state)
 
