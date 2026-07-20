@@ -20,6 +20,7 @@ import numpy as np
 from config import CFG
 from qgan.ancilla import (
     compute_ancilla_entanglement_entropy,
+    compute_bipartite_negativity,
     get_max_entangled_state_with_ancilla_if_needed,
 )
 from qgan.cost_functions import compute_fidelity_and_cost
@@ -30,6 +31,7 @@ from tools.data.data_managers import (
     print_and_log,
     save_entropy,
     save_fidelity_loss,
+    save_negativity,
     save_gen_final_params,
     save_model,
 )
@@ -67,6 +69,7 @@ class Training:
         load_models_if_specified(self)
 
         fidelities_history, losses_history, entropy_history = [], [], []
+        neg_01_history, neg_12_history = [], []
         starttime = datetime.now()
         num_epochs: int = 0
 
@@ -78,6 +81,8 @@ class Training:
             fidelities = []
             losses = []
             entropies = []
+            neg_01_list = []
+            neg_12_list = []
             num_epochs += 1
             for epoch_iter in range(CFG.iterations_epoch):
                 ###########################################################
@@ -93,12 +98,27 @@ class Training:
                 ###########################################################
                 # Every X iterations: compute and save fidelity, loss, and entropy
                 ###########################################################
-                if epoch_iter % CFG.save_fid_and_loss_every_x_iter == 0:
+                if epoch_iter % CFG.compute_and_save_fid_every_x_iter == 0:
                     fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, self.gen.total_gen_state)
                     fidelities.append(fid), losses.append(loss)
-                    if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
+                    if CFG.compute_entanglement and CFG.extra_ancilla:
                         entropy = compute_ancilla_entanglement_entropy(self.gen.total_gen_state)
                         entropies.append(entropy)
+                        
+                    if CFG.system_size >= 2:
+                        # Compute Negativity of the generator's Unitary applied to |00...0>
+                        # This measures the entangling power of the ansatz itself.
+                        pure_zero = np.zeros(2 ** self.gen.size, dtype=complex)
+                        pure_zero[0] = 1.0
+                        pure_zero = np.asmatrix(pure_zero).T
+                        sys_pure_state = np.matmul(self.gen.qc.get_mat_rep(), pure_zero)
+                        
+                        neg_01 = compute_bipartite_negativity(sys_pure_state, 0, 1)
+                        neg_01_list.append(neg_01)
+                    if CFG.system_size >= 3:
+                        # sys_pure_state is already computed above if size >= 2
+                        neg_12 = compute_bipartite_negativity(sys_pure_state, 1, 2)
+                        neg_12_list.append(neg_12)
 
                 ############################################################
                 # Every X iterations: Print and log fidelity, loss, and entropy
@@ -107,8 +127,14 @@ class Training:
                     info = "\nepoch:{:4d} | iters:{:4d} | fidelity:{:8f} | loss:{:8f}".format(
                         num_epochs, epoch_iter + 1, round(fid, 6), round(loss, 6)
                     )
-                    if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
+                    if CFG.compute_entanglement and CFG.extra_ancilla:
                         info += " | entropy:{:8f}".format(round(entropies[-1], 6))
+                    
+                    if CFG.system_size >= 2 and len(neg_01_list) > 0:
+                        info += " | neg(0,1):{:8f}".format(round(neg_01_list[-1], 6))
+                    if CFG.system_size >= 3 and len(neg_12_list) > 0:
+                        info += " | neg(1,2):{:8f}".format(round(neg_12_list[-1], 6))
+                        
                     print_and_log(info, CFG.log_path)
 
             ###########################################################
@@ -116,11 +142,29 @@ class Training:
             ###########################################################
             fidelities_history = np.append(fidelities_history, fidelities)
             losses_history = np.append(losses_history, losses)
-            if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
+            if CFG.compute_entanglement and CFG.extra_ancilla:
                 entropy_history = np.append(entropy_history, entropies)
             else:
                 entropy_history = None
-            plt_fidelity_vs_iter(fidelities_history, losses_history, CFG, num_epochs, entropy_history)
+                
+            if CFG.system_size >= 2:
+                neg_01_history = np.append(neg_01_history, neg_01_list)
+            else:
+                neg_01_history = None
+            if CFG.system_size >= 3:
+                neg_12_history = np.append(neg_12_history, neg_12_list)
+            else:
+                neg_12_history = None
+                
+            plt_fidelity_vs_iter(
+                fidelities_history, 
+                losses_history, 
+                CFG, 
+                num_epochs, 
+                entropy_history,
+                neg_01_history,
+                neg_12_history
+            )
 
             #############################################################
             # Stopping conditions
@@ -144,8 +188,13 @@ class Training:
         # Save data of fidelity and loss
         save_fidelity_loss(fidelities_history, losses_history, CFG.fid_loss_path)
         # Save entropy if available
-        if CFG.compute_ancilla_entropy and CFG.extra_ancilla and entropy_history is not None:
+        if CFG.compute_entanglement and CFG.extra_ancilla and entropy_history is not None:
             save_entropy(entropy_history, CFG.entropy_path)
+            
+        if CFG.system_size >= 2 and neg_01_history is not None:
+            save_negativity(neg_01_history, CFG.negativity_01_path)
+        if CFG.system_size >= 3 and neg_12_history is not None:
+            save_negativity(neg_12_history, CFG.negativity_12_path)
 
         # Save data of the generator and the discriminator
         save_model(self.gen, CFG.model_gen_path)

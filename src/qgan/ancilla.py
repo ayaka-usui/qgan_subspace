@@ -104,3 +104,46 @@ def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> floa
     if not np.any(non_zero):
         return 0.0
     return float(-np.sum(eigvals[non_zero] * np.log2(eigvals[non_zero])))
+
+
+def compute_bipartite_negativity(total_output_state: np.ndarray, global_i: int, global_j: int) -> float:
+    """Compute the Negativity between two qubits in the given pure state.
+    
+    The Negativity is defined as (|| rho_ij^{T_i} ||_1 - 1) / 2.
+    
+    Args:
+        total_output_state (np.ndarray): Full output (pure and vector) state vector.
+        global_i (int): Global index of the first qubit.
+        global_j (int): Global index of the second qubit.
+        
+    Returns:
+        float: The Negativity between the two qubits.
+    """
+    state = np.asarray(total_output_state).flatten()
+    num_qubits = int(np.log2(state.size))
+    if 2**num_qubits != state.size:
+        raise ValueError("State dimension is not a power of 2.")
+
+    keep_indices = sorted([global_i, global_j])
+    trace_indices = [idx for idx in range(num_qubits) if idx not in keep_indices]
+
+    # Reshape state to tensor
+    state_tensor = state.reshape([2] * num_qubits)
+
+    # Partial trace
+    rho = np.tensordot(state_tensor, state_tensor.conj(), axes=(trace_indices, trace_indices))
+
+    # The axes of rho are now (keep_indices[0], keep_indices[1], keep_indices[0]', keep_indices[1]')
+    # Partial transpose with respect to the first subsystem (axis 0)
+    # Swap axis 0 and axis 2
+    rho_pt = np.transpose(rho, (2, 1, 0, 3))
+
+    # Reshape to 4x4
+    rho_pt_mat = rho_pt.reshape(4, 4)
+
+    # Compute trace norm
+    eigvals = np.linalg.eigvalsh(rho_pt_mat)
+
+    # Negativity = sum of absolute values of negative eigenvalues
+    neg_eigvals = eigvals[eigvals < -1e-12]
+    return 0.0 if len(neg_eigvals) == 0 else float(np.sum(np.abs(neg_eigvals)))

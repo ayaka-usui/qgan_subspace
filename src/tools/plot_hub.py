@@ -60,10 +60,13 @@ def generate_all_plots(
 ########################################################################
 # REAL TIME RUN PLOTTING FUNCTION
 ########################################################################
-def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
+def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg_01_history=None, neg_12_history=None):
     show_entropy = (
-        bool(getattr(config, "compute_ancilla_entropy", False)) and entropies is not None and len(entropies) > 0
+        bool(getattr(config, "compute_entanglement", False)) and entropies is not None and len(entropies) > 0
     )
+    show_neg_01 = neg_01_history is not None and len(neg_01_history) > 0
+    show_neg_12 = neg_12_history is not None and len(neg_12_history) > 0
+
     fig, ax_left = plt.subplots(figsize=(8, 5))
     ax_right = ax_left.twinx()
 
@@ -74,6 +77,8 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
         label="Fidelity",
         linewidth=2,
     )
+    
+    ent_line = []
     if show_entropy:
         ent_line = ax_left.plot(
             range(len(entropies)),
@@ -82,8 +87,26 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
             label="Entanglement entropy",
             linewidth=2,
         )
-    else:
-        ent_line = []
+        
+    neg_lines = []
+    if show_neg_01:
+        neg_lines += ax_left.plot(
+            range(len(neg_01_history)),
+            neg_01_history,
+            color="tab:purple",
+            label="Negativity (Q0, Q1)",
+            linewidth=2,
+            linestyle="--",
+        )
+    if show_neg_12:
+        neg_lines += ax_left.plot(
+            range(len(neg_12_history)),
+            neg_12_history,
+            color="tab:orange",
+            label="Negativity (Q1, Q2)",
+            linewidth=2,
+            linestyle="--",
+        )
 
     loss_line = ax_right.plot(
         range(len(losses)),
@@ -94,15 +117,16 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
     )
 
     ax_left.set_xlabel("Iteration")
-    if show_entropy:
-        ax_left.set_ylabel("Fidelity / Entanglement entropy")
+    if show_entropy or show_neg_01 or show_neg_12:
+        ax_left.set_ylabel("Fid / Entropy / Negativity")
     else:
         ax_left.set_ylabel("Fidelity")
+        
     ax_right.set_ylabel("Loss")
     ax_left.set_ylim(0, 1)
-    ax_left.set_title("Fidelity, Entanglement Entropy, and Loss vs Iterations")
+    ax_left.set_title("Training Metrics vs Iterations")
 
-    lines = fid_line + ent_line + loss_line
+    lines = fid_line + ent_line + neg_lines + loss_line
     labels = [line.get_label() for line in lines]
     ax_left.legend(lines, labels, loc="best")
     ax_left.grid(True, alpha=0.3)
