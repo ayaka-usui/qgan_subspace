@@ -54,33 +54,40 @@ class Config:
         self.run_multiple_experiments: bool = True
         self.common_initial_plateaus: bool = True
         # If common_initial_plateaus == true:
-        self.N_initial_plateaus: int = 100
+        self.N_initial_plateaus: int = 3
         self.N_reps_each_init_plateau: int = 1
         # If common_initial_plateaus == false:
         self.N_reps_if_from_scratch: int = 100
 
         self.reps_new_config: list[dict[str, Any]] = [
-            {
-                "extra_ancilla": True,
-                "ancilla_topology": "ansatz",
-                "ancilla_connect_to": None,
-                "do_ancilla_1q_gates": True,
-                "start_ancilla_gates_randomly": False,
-            },
-            {
+             {
                 "extra_ancilla": True,
                 "ancilla_topology": "bridge",
                 "ancilla_connect_to": 1,
                 "do_ancilla_1q_gates": True,
-                "start_ancilla_gates_randomly": False,
+                "start_ancilla_gates_randomly": True,
             },
             {
                 "extra_ancilla": True,
                 "ancilla_topology": "bridge",
                 "ancilla_connect_to": None,
-                "do_ancilla_1q_gates": False,
-                "start_ancilla_gates_randomly": False,
+                "do_ancilla_1q_gates": True,
+                "start_ancilla_gates_randomly": True,
             },
+            {
+                "extra_ancilla": True,
+                "ancilla_topology": "total",
+                "ancilla_connect_to": None,
+                "do_ancilla_1q_gates": True,
+                "start_ancilla_gates_randomly": True,
+            },
+            # {
+            #     "extra_ancilla": True,
+            #     "ancilla_topology": "bridge",
+            #     "ancilla_connect_to": None,
+            #     "do_ancilla_1q_gates": False,
+            #     "start_ancilla_gates_randomly": False,
+            # },
             # {"extra_ancilla": True, "ancilla_topology": "bridge", "target_hamiltonian": "ising_h"},
             # Add more configs here for comparison
         ]
@@ -117,14 +124,14 @@ class Config:
         #
         #   - iterations_epoch: Number of iterations per epoch (default: ~100)
         #
-        #   - save_fid_and_loss_every_x_iter: Saving fidelity and loss every x iterations (default: ~10)
+        #   - compute_and_save_fid_every_x_iter: Saving fidelity and loss every x iterations (default: ~10)
         #
         #   - log_every_x_iter: Logging every x iterations (default: ~10)
-        #           (needs to be a multiple of save_fid_and_loss_every_x_iter)
+        #           (needs to be a multiple of compute_and_save_fid_every_x_iter)
         #
         #   - max_fidelity: Stopping criterion for fidelity (default: ~0.99)
         #
-        #   - compute_ancilla_entropy: Whether to compute the ancilla entanglement entropy at each iteration
+        #   - compute_entanglement: Whether to compute the ancilla entanglement entropy at each iteration
         #       and display it in the live iteration plots (only meaningful when `extra_ancilla` is enabled).
         #
         #   - steps_gen/dis: Discriminator (first) and Generator (second) update steps in each iter (1~5).
@@ -132,10 +139,10 @@ class Config:
         #############################################################################################
         self.epochs: int = 10
         self.iterations_epoch: int = 300
-        self.save_fid_and_loss_every_x_iter: int = 1
-        self.log_every_x_iter: int = 10  # This needs to be a multiple of save_fid_and_loss_every_x_iter
+        self.compute_and_save_fid_every_x_iter: int = 10
+        self.log_every_x_iter: int = 10  # This needs to be a multiple of compute_and_save_fid_every_x_iter
         self.max_fidelity: float = 0.99
-        self.compute_ancilla_entropy: bool = False
+        self.compute_entanglement: bool = False
         self.steps_dis: int = 1
         self.steps_gen: int = 1
 
@@ -199,7 +206,7 @@ class Config:
         #
         #############################################################################################
         self.gen_layers: int = 3  # 2, 3, 5, 10, 20 ...
-        self.gen_ansatz: Literal["ZZ_YY_XX_Z", "ZZ_Z_X", "custom"] = "custom"
+        self.gen_ansatz: Literal["ZZ_YY_XX_Z", "ZZ_Z_X", "custom"] = "ZZ_Z_X"
         self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "XX", "Y", "X"]  # "X", "Y", "Z", "XX", "ZZ", "YY"
 
         #############################################################################################
@@ -264,8 +271,8 @@ class Config:
         self.__post_init_checks__()
 
     def __post_init_checks__(self) -> None:
-        if self.log_every_x_iter % self.save_fid_and_loss_every_x_iter != 0:
-            raise ValueError("log_every_x_iter must be a multiple of save_fid_and_loss_every_x_iter.")
+        if self.log_every_x_iter % self.compute_and_save_fid_every_x_iter != 0:
+            raise ValueError("log_every_x_iter must be a multiple of compute_and_save_fid_every_x_iter.")
 
     def set_results_paths(self) -> None:
         """Set the paths for saving results based on the base data path."""
@@ -275,6 +282,8 @@ class Config:
         self.log_path: str = f"{self.base_data_path}/logs/log.txt"
         self.fid_loss_path: str = f"{self.base_data_path}/fidelities/log_fidelity_loss.txt"
         self.entropy_path: str = f"{self.base_data_path}/fidelities/log_entropy.txt"
+        self.negativity_01_path: str = f"{self.base_data_path}/fidelities/log_negativity_01.txt"
+        self.negativity_12_path: str = f"{self.base_data_path}/fidelities/log_negativity_12.txt"
         self.gen_final_params_path: str = f"{self.base_data_path}/gen_final_params/gen_final_params.txt"
 
     def show_data(self) -> str:
@@ -305,9 +314,9 @@ class Config:
             f"epochs: {self.epochs},\n"
             f"iterations_epoch: {self.iterations_epoch},\n"
             f"log_every_x_iter: {self.log_every_x_iter},\n"
-            f"save_fid_and_loss_every_x_iter: {self.save_fid_and_loss_every_x_iter},\n"
+            f"compute_and_save_fid_every_x_iter: {self.compute_and_save_fid_every_x_iter},\n"
             f"max_fidelity: {self.max_fidelity},\n"
-            f"compute_ancilla_entropy: {self.compute_ancilla_entropy},\n"
+            f"compute_entanglement: {self.compute_entanglement},\n"
             f"steps_dis: {self.steps_dis},\n"
             f"steps_gen: {self.steps_gen},\n"
             "----------------------------------------------\n"
