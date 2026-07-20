@@ -283,7 +283,7 @@ class Config:
         self.fid_loss_path: str = f"{self.base_data_path}/fidelities/log_fidelity_loss.txt"
         self.entropy_path: str = f"{self.base_data_path}/fidelities/log_entropy.txt"
         self.negativity_01_path: str = f"{self.base_data_path}/fidelities/log_negativity_01.txt"
-        self.negativity_12_path: str = f"{self.base_data_path}/fidelities/log_negativity_12.txt"
+        self.negativity_02_path: str = f"{self.base_data_path}/fidelities/log_negativity_02.txt"
         self.gen_final_params_path: str = f"{self.base_data_path}/gen_final_params/gen_final_params.txt"
 
     def show_data(self) -> str:

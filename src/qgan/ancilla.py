@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Ancilla post-processing tools."""
+from src.qgan.generator import Generator
 
 import numpy as np
 
@@ -147,3 +148,22 @@ def compute_bipartite_negativity(total_output_state: np.ndarray, global_i: int, 
     # Negativity = sum of absolute values of negative eigenvalues
     neg_eigvals = eigvals[eigvals < -1e-12]
     return 0.0 if len(neg_eigvals) == 0 else float(np.sum(np.abs(neg_eigvals)))
+
+def compute_negativities(gen: Generator, neg_01_list: list, neg_02_list: list):
+    
+    if CFG.system_size >= 2:
+        # Compute Negativity of the generator's Unitary applied to |00...0>
+        # This measures the entangling power of the ansatz itself.
+        pure_zero = np.zeros(2 ** gen.size, dtype=complex)
+        pure_zero[0] = 1.0
+        pure_zero = np.asmatrix(pure_zero).T
+        sys_pure_state = np.matmul(gen.qc.get_mat_rep(), pure_zero)
+        
+        neg_01 = compute_bipartite_negativity(sys_pure_state, 0, 1)
+        neg_01_list.append(neg_01)
+    if CFG.system_size >= 3:
+        # sys_pure_state is already computed above if size >= 2
+        neg_02 = compute_bipartite_negativity(sys_pure_state, 0, 2)
+        neg_02_list.append(neg_02)
+
+    return neg_01_list, neg_02_list

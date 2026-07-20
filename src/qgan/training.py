@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Training module for the Quantum GAN"""
+from src.qgan.ancilla import compute_negativities
 
 from datetime import datetime
 
@@ -69,7 +70,7 @@ class Training:
         load_models_if_specified(self)
 
         fidelities_history, losses_history, entropy_history = [], [], []
-        neg_01_history, neg_12_history = [], []
+        neg_01_history, neg_02_history = [], []
         starttime = datetime.now()
         num_epochs: int = 0
 
@@ -78,11 +79,7 @@ class Training:
         ###########################################################
         while True:
             # while (f < 0.95):
-            fidelities = []
-            losses = []
-            entropies = []
-            neg_01_list = []
-            neg_12_list = []
+            fidelities, losses, entropies, neg_01_list, neg_02_list = [], [], [], [], []
             num_epochs += 1
             for epoch_iter in range(CFG.iterations_epoch):
                 ###########################################################
@@ -101,24 +98,11 @@ class Training:
                 if epoch_iter % CFG.compute_and_save_fid_every_x_iter == 0:
                     fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, self.gen.total_gen_state)
                     fidelities.append(fid), losses.append(loss)
-                    if CFG.compute_entanglement and CFG.extra_ancilla:
-                        entropy = compute_ancilla_entanglement_entropy(self.gen.total_gen_state)
-                        entropies.append(entropy)
-                        
-                    if CFG.system_size >= 2:
-                        # Compute Negativity of the generator's Unitary applied to |00...0>
-                        # This measures the entangling power of the ansatz itself.
-                        pure_zero = np.zeros(2 ** self.gen.size, dtype=complex)
-                        pure_zero[0] = 1.0
-                        pure_zero = np.asmatrix(pure_zero).T
-                        sys_pure_state = np.matmul(self.gen.qc.get_mat_rep(), pure_zero)
-                        
-                        neg_01 = compute_bipartite_negativity(sys_pure_state, 0, 1)
-                        neg_01_list.append(neg_01)
-                    if CFG.system_size >= 3:
-                        # sys_pure_state is already computed above if size >= 2
-                        neg_12 = compute_bipartite_negativity(sys_pure_state, 1, 2)
-                        neg_12_list.append(neg_12)
+                    if CFG.compute_entanglement:
+                        if CFG.extra_ancilla:
+                            entropy = compute_ancilla_entanglement_entropy(self.gen.total_gen_state)
+                            entropies.append(entropy)
+                        neg_01_list, neg_02_list = compute_negativities(self.gen, neg_01_list, neg_02_list)
 
                 ############################################################
                 # Every X iterations: Print and log fidelity, loss, and entropy
@@ -132,8 +116,8 @@ class Training:
                     
                     if CFG.system_size >= 2 and len(neg_01_list) > 0:
                         info += " | neg(0,1):{:8f}".format(round(neg_01_list[-1], 6))
-                    if CFG.system_size >= 3 and len(neg_12_list) > 0:
-                        info += " | neg(1,2):{:8f}".format(round(neg_12_list[-1], 6))
+                    if CFG.system_size >= 3 and len(neg_02_list) > 0:
+                        info += " | neg(0,2):{:8f}".format(round(neg_02_list[-1], 6))
                         
                     print_and_log(info, CFG.log_path)
 
@@ -152,9 +136,9 @@ class Training:
             else:
                 neg_01_history = None
             if CFG.system_size >= 3:
-                neg_12_history = np.append(neg_12_history, neg_12_list)
+                neg_02_history = np.append(neg_02_history, neg_02_list)
             else:
-                neg_12_history = None
+                neg_02_history = None
                 
             plt_fidelity_vs_iter(
                 fidelities_history, 
@@ -163,7 +147,7 @@ class Training:
                 num_epochs, 
                 entropy_history,
                 neg_01_history,
-                neg_12_history
+                neg_02_history
             )
 
             #############################################################
@@ -193,8 +177,8 @@ class Training:
             
         if CFG.system_size >= 2 and neg_01_history is not None:
             save_negativity(neg_01_history, CFG.negativity_01_path)
-        if CFG.system_size >= 3 and neg_12_history is not None:
-            save_negativity(neg_12_history, CFG.negativity_12_path)
+        if CFG.system_size >= 3 and neg_02_history is not None:
+            save_negativity(neg_02_history, CFG.negativity_02_path)
 
         # Save data of the generator and the discriminator
         save_model(self.gen, CFG.model_gen_path)

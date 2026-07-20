@@ -60,12 +60,12 @@ def generate_all_plots(
 ########################################################################
 # REAL TIME RUN PLOTTING FUNCTION
 ########################################################################
-def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg_01_history=None, neg_12_history=None):
+def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg_01_history=None, neg_02_history=None):
     show_entropy = (
         bool(getattr(config, "compute_entanglement", False)) and entropies is not None and len(entropies) > 0
     )
     show_neg_01 = neg_01_history is not None and len(neg_01_history) > 0
-    show_neg_12 = neg_12_history is not None and len(neg_12_history) > 0
+    show_neg_02 = neg_02_history is not None and len(neg_02_history) > 0
 
     fig, ax_left = plt.subplots(figsize=(8, 5))
     ax_right = ax_left.twinx()
@@ -98,10 +98,10 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg
             linewidth=2,
             linestyle="--",
         )
-    if show_neg_12:
+    if show_neg_02:
         neg_lines += ax_left.plot(
-            range(len(neg_12_history)),
-            neg_12_history,
+            range(len(neg_02_history)),
+            neg_02_history,
             color="tab:orange",
             label="Negativity (Q1, Q2)",
             linewidth=2,
@@ -117,7 +117,7 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg
     )
 
     ax_left.set_xlabel("Iteration")
-    if show_entropy or show_neg_01 or show_neg_12:
+    if show_entropy or show_neg_01 or show_neg_02:
         ax_left.set_ylabel("Fid / Entropy / Negativity")
     else:
         ax_left.set_ylabel("Fidelity")
