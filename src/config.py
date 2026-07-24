@@ -60,7 +60,7 @@ class Config:
         self.N_reps_if_from_scratch: int = 100
 
         self.reps_new_config: list[dict[str, Any]] = [
-             {
+            {
                 "extra_ancilla": True,
                 "ancilla_topology": "bridge",
                 "ancilla_connect_to": 1,
@@ -142,7 +142,7 @@ class Config:
         self.compute_and_save_fid_every_x_iter: int = 10
         self.log_every_x_iter: int = 10  # This needs to be a multiple of compute_and_save_fid_every_x_iter
         self.max_fidelity: float = 0.99
-        self.compute_entanglement: bool = False
+        self.compute_entanglement: bool = True
         self.steps_dis: int = 1
         self.steps_gen: int = 1
 
@@ -182,7 +182,7 @@ class Config:
         #
         ###############################################################################################
         self.system_size: int = 3
-        self.extra_ancilla: bool = False
+        self.extra_ancilla: bool = True
         self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "bridge"
         self.ancilla_connect_to: Optional[int] = None  # None means connected to last one, otherwise to the specified.
         self.do_ancilla_1q_gates: bool = True  # Whether to include 1-qubit gates for ancilla qubit.
@@ -282,8 +282,14 @@ class Config:
         self.log_path: str = f"{self.base_data_path}/logs/log.txt"
         self.fid_loss_path: str = f"{self.base_data_path}/fidelities/log_fidelity_loss.txt"
         self.entropy_path: str = f"{self.base_data_path}/fidelities/log_entropy.txt"
-        self.negativity_01_path: str = f"{self.base_data_path}/fidelities/log_negativity_01.txt"
-        self.negativity_02_path: str = f"{self.base_data_path}/fidelities/log_negativity_02.txt"
+        self.negativity_paths: dict[str, str] = {
+            "1-2": f"{self.base_data_path}/fidelities/log_negativity_12.txt",
+            "1-3": f"{self.base_data_path}/fidelities/log_negativity_13.txt",
+            "1-a": f"{self.base_data_path}/fidelities/log_negativity_1a.txt",
+            "2-3": f"{self.base_data_path}/fidelities/log_negativity_23.txt",
+            "2-a": f"{self.base_data_path}/fidelities/log_negativity_2a.txt",
+            "3-a": f"{self.base_data_path}/fidelities/log_negativity_3a.txt",
+        }
         self.gen_final_params_path: str = f"{self.base_data_path}/gen_final_params/gen_final_params.txt"
 
     def show_data(self) -> str:

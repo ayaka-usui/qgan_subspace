@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Training module for the Quantum GAN"""
-from src.qgan.ancilla import compute_negativities
+from qgan.ancilla import compute_negativities
 
 from datetime import datetime
 
@@ -70,7 +70,27 @@ class Training:
         load_models_if_specified(self)
 
         fidelities_history, losses_history, entropy_history = [], [], []
-        neg_01_history, neg_02_history = [], []
+        neg_history = {pair: [] for pair in ["1-2", "1-3", "1-a", "2-3", "2-a", "3-a"]}
+        
+        # Pre-load plateau histories for plotting if warm starting
+        plat_fids, plat_losses, plat_ents = [], [], []
+        plat_negs = {pair: [] for pair in neg_history}
+        if CFG.load_timestamp:
+            import os
+            try:
+                p_base = os.path.join("generated_data", CFG.load_timestamp, "fidelities")
+                if os.path.exists(os.path.join(p_base, "log_fidelity_loss.txt")):
+                    data = np.loadtxt(os.path.join(p_base, "log_fidelity_loss.txt"))
+                    plat_fids, plat_losses = list(data[0]), list(data[1])
+                if os.path.exists(os.path.join(p_base, "log_entropy.txt")):
+                    plat_ents = list(np.loadtxt(os.path.join(p_base, "log_entropy.txt")))
+                for pair in plat_negs:
+                    path = os.path.join(p_base, f"log_negativity_{pair.replace('-', '')}.txt")
+                    if os.path.exists(path):
+                        plat_negs[pair] = list(np.loadtxt(path))
+            except Exception as e:
+                print(f"Warning: could not load plateau data for plotting: {e}")
+
         starttime = datetime.now()
         num_epochs: int = 0
 
@@ -79,7 +99,8 @@ class Training:
         ###########################################################
         while True:
             # while (f < 0.95):
-            fidelities, losses, entropies, neg_01_list, neg_02_list = [], [], [], [], []
+            fidelities, losses, entropies = [], [], []
+            neg_dict = {pair: [] for pair in neg_history}
             num_epochs += 1
             for epoch_iter in range(CFG.iterations_epoch):
                 ###########################################################
@@ -102,7 +123,7 @@ class Training:
                         if CFG.extra_ancilla:
                             entropy = compute_ancilla_entanglement_entropy(self.gen.total_gen_state)
                             entropies.append(entropy)
-                        neg_01_list, neg_02_list = compute_negativities(self.gen, neg_01_list, neg_02_list)
+                        neg_dict = compute_negativities(self.gen, neg_dict)
 
                 ############################################################
                 # Every X iterations: Print and log fidelity, loss, and entropy
@@ -114,10 +135,9 @@ class Training:
                     if CFG.compute_entanglement and CFG.extra_ancilla:
                         info += " | entropy:{:8f}".format(round(entropies[-1], 6))
                     
-                    if CFG.system_size >= 2 and len(neg_01_list) > 0:
-                        info += " | neg(0,1):{:8f}".format(round(neg_01_list[-1], 6))
-                    if CFG.system_size >= 3 and len(neg_02_list) > 0:
-                        info += " | neg(0,2):{:8f}".format(round(neg_02_list[-1], 6))
+                    if len(neg_dict["1-2"]) > 0:
+                        info += " | neg(1,2):{:8f}".format(round(neg_dict["1-2"][-1], 6))
+                        info += " | neg(1,3):{:8f}".format(round(neg_dict["1-3"][-1], 6))
                         
                     print_and_log(info, CFG.log_path)
 
@@ -131,23 +151,23 @@ class Training:
             else:
                 entropy_history = None
                 
-            if CFG.system_size >= 2:
-                neg_01_history = np.append(neg_01_history, neg_01_list)
-            else:
-                neg_01_history = None
-            if CFG.system_size >= 3:
-                neg_02_history = np.append(neg_02_history, neg_02_list)
-            else:
-                neg_02_history = None
-                
+            for pair in neg_history:
+                neg_history[pair] = np.append(neg_history[pair], neg_dict[pair])
+
+            # Stitch with plateau data for plotting
+            plot_fids = plat_fids + list(fidelities_history)
+            plot_losses = plat_losses + list(losses_history)
+            plot_ents = plat_ents + list(entropy_history) if entropy_history is not None else None
+            plot_negs = {p: plat_negs[p] + list(neg_history[p]) for p in neg_history}
+
             plt_fidelity_vs_iter(
-                fidelities_history, 
-                losses_history, 
-                CFG, 
-                num_epochs, 
-                entropy_history,
-                neg_01_history,
-                neg_02_history
+                plot_fids,
+                plot_losses,
+                CFG,
+                num_epochs,
+                plot_ents,
+                plot_negs,
+                len(plat_fids) # passed to draw vertical line
             )
 
             #############################################################
@@ -175,10 +195,9 @@ class Training:
         if CFG.compute_entanglement and CFG.extra_ancilla and entropy_history is not None:
             save_entropy(entropy_history, CFG.entropy_path)
             
-        if CFG.system_size >= 2 and neg_01_history is not None:
-            save_negativity(neg_01_history, CFG.negativity_01_path)
-        if CFG.system_size >= 3 and neg_02_history is not None:
-            save_negativity(neg_02_history, CFG.negativity_02_path)
+        for pair, path in CFG.negativity_paths.items():
+            if len(neg_history[pair]) > 0:
+                save_negativity(neg_history[pair], path)
 
         # Save data of the generator and the discriminator
         save_model(self.gen, CFG.model_gen_path)

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Ancilla post-processing tools."""
-from src.qgan.generator import Generator
+from qgan.generator import Generator
 
 import numpy as np
 
@@ -149,21 +149,48 @@ def compute_bipartite_negativity(total_output_state: np.ndarray, global_i: int, 
     neg_eigvals = eigvals[eigvals < -1e-12]
     return 0.0 if len(neg_eigvals) == 0 else float(np.sum(np.abs(neg_eigvals)))
 
-def compute_negativities(gen: Generator, neg_01_list: list, neg_02_list: list):
+def get_random_product_states(size: int, num_states: int = 50) -> list[np.ndarray]:
+    """Generates a batch of Haar-random pure product states for rigorous Entangling Power computation.
     
-    if CFG.system_size >= 2:
-        # Compute Negativity of the generator's Unitary applied to |00...0>
-        # This measures the entangling power of the ansatz itself.
-        pure_zero = np.zeros(2 ** gen.size, dtype=complex)
-        pure_zero[0] = 1.0
-        pure_zero = np.asmatrix(pure_zero).T
-        sys_pure_state = np.matmul(gen.qc.get_mat_rep(), pure_zero)
-        
-        neg_01 = compute_bipartite_negativity(sys_pure_state, 0, 1)
-        neg_01_list.append(neg_01)
-    if CFG.system_size >= 3:
-        # sys_pure_state is already computed above if size >= 2
-        neg_02 = compute_bipartite_negativity(sys_pure_state, 0, 2)
-        neg_02_list.append(neg_02)
+    In literature (Zanardi, 2000), Entangling Power is mathematically defined as the 
+    average entanglement generated when acting on a uniform distribution of random product states.
+    """
+    states = []
+    
+    for _ in range(num_states):
+        state = None
+        for _ in range(size):
+            # Generate random 2D complex vector
+            v = np.random.randn(2) + 1j * np.random.randn(2)
+            v = v / np.linalg.norm(v)
+            v = v.reshape(2, 1)
+            
+            if state is None:
+                state = v
+            else:
+                state = np.kron(state, v)
+        states.append(state)
 
-    return neg_01_list, neg_02_list
+    return states
+
+def compute_negativities(gen: Generator, neg_dict: dict[str, list]):
+    if CFG.system_size >= 2 and gen.size >= 4:
+        states = get_random_product_states(gen.size, num_states=50)
+        U_gen = gen.qc.get_mat_rep()
+        
+        sum_neg = {k: 0.0 for k in neg_dict}
+        
+        for state in states:
+            sys_pure_state = np.matmul(U_gen, state)
+            
+            sum_neg["1-2"] += compute_bipartite_negativity(sys_pure_state, 0, 1)
+            sum_neg["1-3"] += compute_bipartite_negativity(sys_pure_state, 0, 2)
+            sum_neg["1-a"] += compute_bipartite_negativity(sys_pure_state, 0, 3)
+            sum_neg["2-3"] += compute_bipartite_negativity(sys_pure_state, 1, 2)
+            sum_neg["2-a"] += compute_bipartite_negativity(sys_pure_state, 1, 3)
+            sum_neg["3-a"] += compute_bipartite_negativity(sys_pure_state, 2, 3)
+                
+        for k in sum_neg:
+            neg_dict[k].append(sum_neg[k] / len(states))
+
+    return neg_dict
