@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Ancilla post-processing tools."""
-from qgan.generator import Generator
 
 import numpy as np
 
 from config import CFG
+from qgan.generator import Generator
 
 
 def get_max_entangled_state_with_ancilla_if_needed(size: int) -> np.ndarray:
@@ -57,9 +57,7 @@ def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.nda
     """
     state = np.asarray(total_output_state).flatten()
     if state.size % 2 != 0:
-        raise ValueError(
-            "The total output state dimension must be even to trace out the ancilla qubit."
-        )
+        raise ValueError("The total output state dimension must be even to trace out the ancilla qubit.")
 
     reshaped = state.reshape(-1, 2)
     rho = reshaped.conj().T @ reshaped
@@ -67,9 +65,7 @@ def get_ancilla_reduced_density_matrix(total_output_state: np.ndarray) -> np.nda
     tr = np.real_if_close(tr, tol=1000)
 
     if not np.isclose(tr, 1.0, rtol=1e-2, atol=1e-2):
-        raise ValueError(
-            f"Reduced density matrix trace must be close to 1, but got {tr!r}."
-        )
+        raise ValueError(f"Reduced density matrix trace must be close to 1, but got {tr!r}.")
 
     rho = rho / tr
     # Enforce Hermiticity against numerical noise
@@ -95,9 +91,7 @@ def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> floa
 
     # Check eigenvalues are in valid range [0, 1]
     if np.any(eigvals < -1e-10) or np.any(eigvals > 1.0 + 1e-10):
-        raise ValueError(
-            f"Eigenvalues of reduced density matrix must be in [0, 1], but got: {eigvals}"
-        )
+        raise ValueError(f"Eigenvalues of reduced density matrix must be in [0, 1], but got: {eigvals}")
 
     # Clamp to valid range to handle floating point errors near boundaries
     eigvals = np.clip(eigvals, 0.0, 1.0)
@@ -109,14 +103,14 @@ def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> floa
 
 def compute_bipartite_negativity(total_output_state: np.ndarray, global_i: int, global_j: int) -> float:
     """Compute the Negativity between two qubits in the given pure state.
-    
+
     The Negativity is defined as (|| rho_ij^{T_i} ||_1 - 1) / 2.
-    
+
     Args:
         total_output_state (np.ndarray): Full output (pure and vector) state vector.
         global_i (int): Global index of the first qubit.
         global_j (int): Global index of the second qubit.
-        
+
     Returns:
         float: The Negativity between the two qubits.
     """
@@ -149,14 +143,15 @@ def compute_bipartite_negativity(total_output_state: np.ndarray, global_i: int, 
     neg_eigvals = eigvals[eigvals < -1e-12]
     return 0.0 if len(neg_eigvals) == 0 else float(np.sum(np.abs(neg_eigvals)))
 
+
 def get_random_product_states(size: int, num_states: int = 50) -> list[np.ndarray]:
     """Generates a batch of Haar-random pure product states for rigorous Entangling Power computation.
-    
-    In literature (Zanardi, 2000), Entangling Power is mathematically defined as the 
+
+    In literature (Zanardi, 2000), Entangling Power is mathematically defined as the
     average entanglement generated when acting on a uniform distribution of random product states.
     """
     states = []
-    
+
     for _ in range(num_states):
         state = None
         for _ in range(size):
@@ -164,7 +159,7 @@ def get_random_product_states(size: int, num_states: int = 50) -> list[np.ndarra
             v = np.random.randn(2) + 1j * np.random.randn(2)
             v = v / np.linalg.norm(v)
             v = v.reshape(2, 1)
-            
+
             if state is None:
                 state = v
             else:
@@ -173,23 +168,24 @@ def get_random_product_states(size: int, num_states: int = 50) -> list[np.ndarra
 
     return states
 
+
 def compute_negativities(gen: Generator, neg_dict: dict[str, list]):
     if CFG.system_size >= 2 and gen.size >= 4:
         states = get_random_product_states(gen.size, num_states=50)
         U_gen = gen.qc.get_mat_rep()
-        
+
         sum_neg = {k: 0.0 for k in neg_dict}
-        
+
         for state in states:
             sys_pure_state = np.matmul(U_gen, state)
-            
+
             sum_neg["1-2"] += compute_bipartite_negativity(sys_pure_state, 0, 1)
             sum_neg["1-3"] += compute_bipartite_negativity(sys_pure_state, 0, 2)
-            sum_neg["1-a"] += compute_bipartite_negativity(sys_pure_state, 0, 3)
             sum_neg["2-3"] += compute_bipartite_negativity(sys_pure_state, 1, 2)
+            sum_neg["1-a"] += compute_bipartite_negativity(sys_pure_state, 0, 3)
             sum_neg["2-a"] += compute_bipartite_negativity(sys_pure_state, 1, 3)
             sum_neg["3-a"] += compute_bipartite_negativity(sys_pure_state, 2, 3)
-                
+
         for k in sum_neg:
             neg_dict[k].append(sum_neg[k] / len(states))
 

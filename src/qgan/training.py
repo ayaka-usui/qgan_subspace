@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Training module for the Quantum GAN"""
-from qgan.ancilla import compute_negativities
 
 from datetime import datetime
 
@@ -22,6 +21,7 @@ from config import CFG
 from qgan.ancilla import (
     compute_ancilla_entanglement_entropy,
     compute_bipartite_negativity,
+    compute_negativities,
     get_max_entangled_state_with_ancilla_if_needed,
 )
 from qgan.cost_functions import compute_fidelity_and_cost
@@ -32,9 +32,9 @@ from tools.data.data_managers import (
     print_and_log,
     save_entropy,
     save_fidelity_loss,
-    save_negativity,
     save_gen_final_params,
     save_model,
+    save_negativity,
 )
 from tools.data.loading_helpers import load_models_if_specified
 from tools.plot_hub import plt_fidelity_vs_iter
@@ -70,13 +70,14 @@ class Training:
         load_models_if_specified(self)
 
         fidelities_history, losses_history, entropy_history = [], [], []
-        neg_history = {pair: [] for pair in ["1-2", "1-3", "1-a", "2-3", "2-a", "3-a"]}
-        
+        neg_history = {pair: [] for pair in ["1-2", "1-3", "2-3", "1-a", "2-a", "3-a"]}
+
         # Pre-load plateau histories for plotting if warm starting
         plat_fids, plat_losses, plat_ents = [], [], []
         plat_negs = {pair: [] for pair in neg_history}
         if CFG.load_timestamp:
             import os
+
             try:
                 p_base = os.path.join("generated_data", CFG.load_timestamp, "fidelities")
                 if os.path.exists(os.path.join(p_base, "log_fidelity_loss.txt")):
@@ -134,11 +135,11 @@ class Training:
                     )
                     if CFG.compute_entanglement and CFG.extra_ancilla:
                         info += " | entropy:{:8f}".format(round(entropies[-1], 6))
-                    
+
                     if len(neg_dict["1-2"]) > 0:
                         info += " | neg(1,2):{:8f}".format(round(neg_dict["1-2"][-1], 6))
                         info += " | neg(1,3):{:8f}".format(round(neg_dict["1-3"][-1], 6))
-                        
+
                     print_and_log(info, CFG.log_path)
 
             ###########################################################
@@ -150,7 +151,7 @@ class Training:
                 entropy_history = np.append(entropy_history, entropies)
             else:
                 entropy_history = None
-                
+
             for pair in neg_history:
                 neg_history[pair] = np.append(neg_history[pair], neg_dict[pair])
 
@@ -167,7 +168,7 @@ class Training:
                 num_epochs,
                 plot_ents,
                 plot_negs,
-                len(plat_fids) # passed to draw vertical line
+                len(plat_fids),  # passed to draw vertical line
             )
 
             #############################################################
@@ -194,7 +195,7 @@ class Training:
         # Save entropy if available
         if CFG.compute_entanglement and CFG.extra_ancilla and entropy_history is not None:
             save_entropy(entropy_history, CFG.entropy_path)
-            
+
         for pair, path in CFG.negativity_paths.items():
             if len(neg_history[pair]) > 0:
                 save_negativity(neg_history[pair], path)
