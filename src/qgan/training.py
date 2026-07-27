@@ -70,7 +70,8 @@ class Training:
         load_models_if_specified(self)
 
         fidelities_history, losses_history, entropy_history = [], [], []
-        neg_history = {pair: [] for pair in ["1-2", "1-3", "2-3", "1-a", "2-a", "3-a"]}
+        neg_pairs = ["1-2", "1-3", "2-3"] if not CFG.extra_ancilla else ["1-2", "1-3", "2-3", "1-a", "2-a", "3-a"]
+        neg_history = {pair: [] for pair in neg_pairs}
 
         # Pre-load plateau histories for plotting if warm starting
         plat_fids, plat_losses, plat_ents = [], [], []

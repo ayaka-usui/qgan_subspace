@@ -179,12 +179,12 @@ def compute_negativities(gen: Generator, neg_dict: dict[str, list]):
         for state in states:
             sys_pure_state = np.matmul(U_gen, state)
 
-            sum_neg["1-2"] += compute_bipartite_negativity(sys_pure_state, 0, 1)
-            sum_neg["1-3"] += compute_bipartite_negativity(sys_pure_state, 0, 2)
-            sum_neg["2-3"] += compute_bipartite_negativity(sys_pure_state, 1, 2)
-            sum_neg["1-a"] += compute_bipartite_negativity(sys_pure_state, 0, 3)
-            sum_neg["2-a"] += compute_bipartite_negativity(sys_pure_state, 1, 3)
-            sum_neg["3-a"] += compute_bipartite_negativity(sys_pure_state, 2, 3)
+            if "1-2" in sum_neg: sum_neg["1-2"] += compute_bipartite_negativity(sys_pure_state, 0, 1)
+            if "1-3" in sum_neg: sum_neg["1-3"] += compute_bipartite_negativity(sys_pure_state, 0, 2)
+            if "2-3" in sum_neg: sum_neg["2-3"] += compute_bipartite_negativity(sys_pure_state, 1, 2)
+            if "1-a" in sum_neg: sum_neg["1-a"] += compute_bipartite_negativity(sys_pure_state, 0, 3)
+            if "2-a" in sum_neg: sum_neg["2-a"] += compute_bipartite_negativity(sys_pure_state, 1, 3)
+            if "3-a" in sum_neg: sum_neg["3-a"] += compute_bipartite_negativity(sys_pure_state, 2, 3)
 
         for k in sum_neg:
             neg_dict[k].append(sum_neg[k] / len(states))

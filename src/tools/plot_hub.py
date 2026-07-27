@@ -132,6 +132,11 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg
         
         for pair, history in neg_history.items():
             if len(history) > 0:
+                # If the history is shorter than fidelities, it means it's missing the plateau.
+                # We pad it with zeros so it aligns correctly after the plateau_split_idx.
+                if len(history) < len(fidelities) and plateau_split_idx > 0:
+                    history = list(np.zeros(plateau_split_idx)) + list(history)
+                
                 ax_bot.plot(
                     range(len(history)),
                     history,
