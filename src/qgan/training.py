@@ -198,7 +198,7 @@ class Training:
             save_entropy(entropy_history, CFG.entropy_path)
 
         for pair, path in CFG.negativity_paths.items():
-            if len(neg_history[pair]) > 0:
+            if pair in neg_history and len(neg_history[pair]) > 0:
                 save_negativity(neg_history[pair], path)
 
         # Save data of the generator and the discriminator
