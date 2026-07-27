@@ -170,7 +170,7 @@ def get_random_product_states(size: int, num_states: int = 50) -> list[np.ndarra
 
 
 def compute_negativities(gen: Generator, neg_dict: dict[str, list]):
-    if CFG.system_size >= 2 and gen.size >= 4:
+    if CFG.system_size >= 2 and gen.size >= 3:
         states = get_random_product_states(gen.size, num_states=50)
         U_gen = gen.qc.get_mat_rep()
 
