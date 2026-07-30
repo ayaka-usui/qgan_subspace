@@ -535,7 +535,7 @@ def collect_fidelities_by_plateau_for_run(base_path, run_idx):
         rep_fid_path = os.path.join(root, "log_fidelity_loss.txt")
         rep_max = get_max_fidelity_from_file(rep_fid_path)
 
-        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "log_fidelity_loss.txt")
+        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "fidelities", "log_fidelity_loss.txt")
         init_max = get_max_fidelity_from_file(initial_log)
 
         candidates = [v for v in (rep_max, init_max) if v is not None]
@@ -576,7 +576,7 @@ def collect_fidelities_by_plateau_control(base_path):
         control_fid_path = os.path.join(root, "log_fidelity_loss.txt")
         control_max = get_max_fidelity_from_file(control_fid_path)
 
-        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "log_fidelity_loss.txt")
+        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "fidelities", "log_fidelity_loss.txt")
         init_max = get_max_fidelity_from_file(initial_log)
 
         candidates = [v for v in (control_max, init_max) if v is not None]
