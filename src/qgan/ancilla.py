@@ -144,21 +144,25 @@ def compute_bipartite_negativity(total_output_state: np.ndarray, global_i: int, 
     return 0.0 if len(neg_eigvals) == 0 else float(np.sum(np.abs(neg_eigvals)))
 
 
-def get_random_product_states(size: int, num_states: int = 50) -> list[np.ndarray]:
+def get_random_product_states(size: int, num_states: int = 50, fixed_ancilla: bool = False) -> list[np.ndarray]:
     """Generates a batch of Haar-random pure product states for rigorous Entangling Power computation.
 
     In literature (Zanardi, 2000), Entangling Power is mathematically defined as the
     average entanglement generated when acting on a uniform distribution of random product states.
+    If fixed_ancilla is True, the last qubit is initialized to the |0> state instead of a random Haar state.
     """
     states = []
 
     for _ in range(num_states):
         state = None
-        for _ in range(size):
-            # Generate random 2D complex vector
-            v = np.random.randn(2) + 1j * np.random.randn(2)
-            v = v / np.linalg.norm(v)
-            v = v.reshape(2, 1)
+        for i in range(size):
+            if fixed_ancilla and i == size - 1:
+                v = np.array([1, 0], dtype=complex).reshape(2, 1)
+            else:
+                # Generate random 2D complex vector
+                v = np.random.randn(2) + 1j * np.random.randn(2)
+                v = v / np.linalg.norm(v)
+                v = v.reshape(2, 1)
 
             if state is None:
                 state = v
@@ -171,7 +175,7 @@ def get_random_product_states(size: int, num_states: int = 50) -> list[np.ndarra
 
 def compute_negativities(gen: Generator, neg_dict: dict[str, list]):
     if CFG.system_size >= 2 and gen.size >= 3:
-        states = get_random_product_states(gen.size, num_states=50)
+        states = get_random_product_states(gen.size, num_states=50, fixed_ancilla=CFG.extra_ancilla)
         U_gen = gen.qc.get_mat_rep()
 
         sum_neg = {k: 0.0 for k in neg_dict}
