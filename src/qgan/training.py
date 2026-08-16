@@ -20,6 +20,8 @@ import numpy as np
 from config import CFG
 from qgan.ancilla import (
     compute_ancilla_entanglement_entropy,
+    compute_bipartite_negativity,
+    compute_negativities,
     get_max_entangled_state_with_ancilla_if_needed,
 )
 from qgan.cost_functions import compute_fidelity_and_cost
@@ -32,6 +34,7 @@ from tools.data.data_managers import (
     save_fidelity_loss,
     save_gen_final_params,
     save_model,
+    save_negativity,
 )
 from tools.data.loading_helpers import load_models_if_specified
 from tools.plot_hub import plt_fidelity_vs_iter
@@ -67,6 +70,29 @@ class Training:
         load_models_if_specified(self)
 
         fidelities_history, losses_history, entropy_history = [], [], []
+        neg_pairs = ["1-2", "1-3", "2-3"] if not CFG.extra_ancilla else ["1-2", "1-3", "2-3", "1-a", "2-a", "3-a"]
+        neg_history = {pair: [] for pair in neg_pairs}
+
+        # Pre-load plateau histories for plotting if warm starting
+        plat_fids, plat_losses, plat_ents = [], [], []
+        plat_negs = {pair: [] for pair in neg_history}
+        if CFG.load_timestamp:
+            import os
+
+            try:
+                p_base = os.path.join("generated_data", CFG.load_timestamp, "fidelities")
+                if os.path.exists(os.path.join(p_base, "log_fidelity_loss.txt")):
+                    data = np.loadtxt(os.path.join(p_base, "log_fidelity_loss.txt"))
+                    plat_fids, plat_losses = list(data[0]), list(data[1])
+                if os.path.exists(os.path.join(p_base, "log_entropy.txt")):
+                    plat_ents = list(np.loadtxt(os.path.join(p_base, "log_entropy.txt")))
+                for pair in plat_negs:
+                    path = os.path.join(p_base, f"log_negativity_{pair.replace('-', '')}.txt")
+                    if os.path.exists(path):
+                        plat_negs[pair] = list(np.loadtxt(path))
+            except Exception as e:
+                print(f"Warning: could not load plateau data for plotting: {e}")
+
         starttime = datetime.now()
         num_epochs: int = 0
 
@@ -75,9 +101,8 @@ class Training:
         ###########################################################
         while True:
             # while (f < 0.95):
-            fidelities = []
-            losses = []
-            entropies = []
+            fidelities, losses, entropies = [], [], []
+            neg_dict = {pair: [] for pair in neg_history}
             num_epochs += 1
             for epoch_iter in range(CFG.iterations_epoch):
                 ###########################################################
@@ -93,12 +118,14 @@ class Training:
                 ###########################################################
                 # Every X iterations: compute and save fidelity, loss, and entropy
                 ###########################################################
-                if epoch_iter % CFG.save_fid_and_loss_every_x_iter == 0:
+                if epoch_iter % CFG.compute_and_save_fid_every_x_iter == 0:
                     fid, loss = compute_fidelity_and_cost(self.dis, self.final_target_state, self.gen.total_gen_state)
                     fidelities.append(fid), losses.append(loss)
-                    if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
-                        entropy = compute_ancilla_entanglement_entropy(self.gen.total_gen_state)
-                        entropies.append(entropy)
+                    if CFG.compute_entanglement:
+                        if CFG.extra_ancilla:
+                            entropy = compute_ancilla_entanglement_entropy(self.gen.total_gen_state)
+                            entropies.append(entropy)
+                        neg_dict = compute_negativities(self.gen, neg_dict)
 
                 ############################################################
                 # Every X iterations: Print and log fidelity, loss, and entropy
@@ -107,8 +134,13 @@ class Training:
                     info = "\nepoch:{:4d} | iters:{:4d} | fidelity:{:8f} | loss:{:8f}".format(
                         num_epochs, epoch_iter + 1, round(fid, 6), round(loss, 6)
                     )
-                    if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
+                    if CFG.compute_entanglement and CFG.extra_ancilla:
                         info += " | entropy:{:8f}".format(round(entropies[-1], 6))
+
+                    if len(neg_dict["1-2"]) > 0:
+                        info += " | neg(1,2):{:8f}".format(round(neg_dict["1-2"][-1], 6))
+                        info += " | neg(1,3):{:8f}".format(round(neg_dict["1-3"][-1], 6))
+
                     print_and_log(info, CFG.log_path)
 
             ###########################################################
@@ -116,11 +148,29 @@ class Training:
             ###########################################################
             fidelities_history = np.append(fidelities_history, fidelities)
             losses_history = np.append(losses_history, losses)
-            if CFG.compute_ancilla_entropy and CFG.extra_ancilla:
+            if CFG.compute_entanglement and CFG.extra_ancilla:
                 entropy_history = np.append(entropy_history, entropies)
             else:
                 entropy_history = None
-            plt_fidelity_vs_iter(fidelities_history, losses_history, CFG, num_epochs, entropy_history)
+
+            for pair in neg_history:
+                neg_history[pair] = np.append(neg_history[pair], neg_dict[pair])
+
+            # Stitch with plateau data for plotting
+            plot_fids = plat_fids + list(fidelities_history)
+            plot_losses = plat_losses + list(losses_history)
+            plot_ents = plat_ents + list(entropy_history) if entropy_history is not None else None
+            plot_negs = {p: plat_negs[p] + list(neg_history[p]) for p in neg_history}
+
+            plt_fidelity_vs_iter(
+                plot_fids,
+                plot_losses,
+                CFG,
+                num_epochs,
+                plot_ents,
+                plot_negs,
+                len(plat_fids),  # passed to draw vertical line
+            )
 
             #############################################################
             # Stopping conditions
@@ -144,8 +194,12 @@ class Training:
         # Save data of fidelity and loss
         save_fidelity_loss(fidelities_history, losses_history, CFG.fid_loss_path)
         # Save entropy if available
-        if CFG.compute_ancilla_entropy and CFG.extra_ancilla and entropy_history is not None:
+        if CFG.compute_entanglement and CFG.extra_ancilla and entropy_history is not None:
             save_entropy(entropy_history, CFG.entropy_path)
+
+        for pair, path in CFG.negativity_paths.items():
+            if pair in neg_history and len(neg_history[pair]) > 0:
+                save_negativity(neg_history[pair], path)
 
         # Save data of the generator and the discriminator
         save_model(self.gen, CFG.model_gen_path)

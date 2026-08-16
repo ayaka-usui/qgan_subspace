@@ -74,6 +74,22 @@ def save_entropy(entropies_history, file_path):
         np.savetxt(f, entropies_history)
 
 
+def save_negativity(negativity_history, file_path):
+    """Save negativity history to a file.
+
+    Args:
+        negativity_history: Array of negativity values.
+        file_path: Path to save the negativity data.
+    """
+    if negativity_history is None or len(negativity_history) == 0:
+        return
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "wb") as f:
+        np.savetxt(f, negativity_history)
+
+
 def save_gen_final_params(gen, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     array_angle = np.zeros(len(gen.qc.gates))
