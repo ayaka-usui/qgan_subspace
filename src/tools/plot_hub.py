@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """The plot tool"""
-
 import os
 import re
 
@@ -39,12 +38,14 @@ def generate_all_plots(
 
     Optional `run_names` allows custom x-axis labels (list or dict mapping run index to string).
     """
-    # 1) Histogram-style plots (unchanged)
+    # 1) Histogram-style plots
     for run_idx in range(1, n_runs + 1):
         plot_recurrence_vs_fid(base_path, log_path, run_idx, max_fidelity, common_initial_plateaus)
+        if common_initial_plateaus:
+            plot_stitched_observables(base_path, log_path, run_idx, common_initial_plateaus)
     plot_comparison_all_runs(base_path, log_path, n_runs, max_fidelity, common_initial_plateaus)
 
-    # 2) Scatter-style plots (refactored)
+    # 2) Scatter-style plots
     if not common_initial_plateaus:
         # from_scratch (and change): single merged scatter
         scatter_plot(base_path, log_path, n_runs, max_fidelity, run_names, x_label)
@@ -60,11 +61,17 @@ def generate_all_plots(
 ########################################################################
 # REAL TIME RUN PLOTTING FUNCTION
 ########################################################################
-def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
-    show_entropy = (
-        bool(getattr(config, "compute_ancilla_entropy", False)) and entropies is not None and len(entropies) > 0
-    )
-    fig, ax_left = plt.subplots(figsize=(8, 5))
+def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg_history=None, plateau_split_idx=0):
+    show_entropy = bool(getattr(config, "compute_entanglement", False)) and entropies is not None and len(entropies) > 0
+    has_negs = neg_history is not None and any(len(v) > 0 for v in neg_history.values())
+
+    if has_negs:
+        fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+        ax_left = ax_top
+    else:
+        fig, ax_left = plt.subplots(figsize=(8, 5))
+        ax_bot = None
+
     ax_right = ax_left.twinx()
 
     fid_line = ax_left.plot(
@@ -74,6 +81,8 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
         label="Fidelity",
         linewidth=2,
     )
+
+    ent_line = []
     if show_entropy:
         ent_line = ax_left.plot(
             range(len(entropies)),
@@ -82,8 +91,6 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
             label="Entanglement entropy",
             linewidth=2,
         )
-    else:
-        ent_line = []
 
     loss_line = ax_right.plot(
         range(len(losses)),
@@ -93,19 +100,58 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
         linewidth=2,
     )
 
-    ax_left.set_xlabel("Iteration")
-    if show_entropy:
-        ax_left.set_ylabel("Fidelity / Entanglement entropy")
-    else:
-        ax_left.set_ylabel("Fidelity")
+    if plateau_split_idx > 0:
+        ax_left.axvline(x=plateau_split_idx, color="black", linestyle=":", linewidth=2, label="Ancilla Added")
+        if ax_bot:
+            ax_bot.axvline(x=plateau_split_idx, color="black", linestyle=":", linewidth=2)
+
+    if not has_negs:
+        ax_left.set_xlabel("Iteration")
+
+    ax_left.set_ylabel("Fidelity / Entropy")
     ax_right.set_ylabel("Loss")
-    ax_left.set_ylim(0, 1)
-    ax_left.set_title("Fidelity, Entanglement Entropy, and Loss vs Iterations")
+    ax_left.set_ylim(-0.01, 1.01)
+    ax_left.set_title("Training Metrics vs Iterations")
 
     lines = fid_line + ent_line + loss_line
     labels = [line.get_label() for line in lines]
+    if plateau_split_idx > 0:
+        lines.append(plt.Line2D([0], [0], color="black", linestyle=":", linewidth=2))
+        labels.append("Ancilla Added")
     ax_left.legend(lines, labels, loc="best")
     ax_left.grid(True, alpha=0.3)
+
+    if has_negs:
+        colors = {
+            "1-2": "tab:blue",
+            "1-3": "tab:cyan",
+            "2-3": "tab:purple",
+            "1-a": "tab:red",
+            "2-a": "tab:orange",
+            "3-a": "tab:pink",
+        }
+        styles = {"1-2": "-", "1-3": "-", "2-3": "-", "1-a": "--", "2-a": "--", "3-a": "--"}
+
+        for pair, history in neg_history.items():
+            if len(history) > 0:
+                # If the history is shorter than fidelities, it means it's missing the plateau.
+                # We pad it with zeros so it aligns correctly after the plateau_split_idx.
+                if len(history) < len(fidelities) and plateau_split_idx > 0:
+                    history = list(np.zeros(plateau_split_idx)) + list(history)
+
+                ax_bot.plot(
+                    range(len(history)),
+                    history,
+                    color=colors.get(pair, "black"),
+                    linestyle=styles.get(pair, "-"),
+                    label=f"Negativity {pair}",
+                    linewidth=2,
+                )
+        ax_bot.set_xlabel("Iteration")
+        ax_bot.set_ylabel("Entangling Power (Negativity)")
+        ax_bot.legend(loc="best")
+        ax_bot.grid(True, alpha=0.3)
+
     plt.tight_layout()
 
     # Save the figure
@@ -116,8 +162,177 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None):
 
 
 #########################################################################
-# PLOT INDIVIDUAL RUNS HISTOGRAMS
+# STITCHED POST-PROCESSING PLOTTING
 #########################################################################
+def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plateaus):
+    """
+    Generates APS-style stitched plots comparing the changed run to the control run.
+    """
+    import logging
+    
+    try:
+        for intial_plateau_idx in range(1, 100):
+            plateau_base = os.path.join(base_path, f"initial_plateau_{intial_plateau_idx}") if common_initial_plateaus else base_path
+            control_base = os.path.join(plateau_base, "repeated_control")
+            changed_base = os.path.join(plateau_base, f"repeated_changed_run{run_idx}", "1")
+
+            # Paths
+            p_fid = os.path.join(plateau_base, "fidelities", "log_fidelity_loss.txt")
+            p_ent = os.path.join(plateau_base, "fidelities", "log_entropy.txt")
+            
+            ch_fid = os.path.join(changed_base, "fidelities", "log_fidelity_loss.txt")
+            ch_ent = os.path.join(changed_base, "fidelities", "log_entropy.txt")
+
+            co_fid = os.path.join(control_base, "fidelities", "log_fidelity_loss.txt")
+            co_ent = os.path.join(control_base, "fidelities", "log_entropy.txt")
+
+            if not os.path.exists(p_fid) or not os.path.exists(ch_fid) or not os.path.exists(co_fid):
+                return
+
+            # Helper to extract the first column/row safely
+            def _extract_first_dim(data):
+                if data.ndim == 1:
+                    return data[:len(data) // 2]
+                return data[0] if data.shape[0] < data.shape[1] else data[:, 0]
+
+            # Load
+            p_fid_arr = _extract_first_dim(np.loadtxt(p_fid))
+            ch_fid_arr = _extract_first_dim(np.loadtxt(ch_fid))
+            co_fid_arr = _extract_first_dim(np.loadtxt(co_fid))
+
+            p_ent_arr = np.loadtxt(p_ent) if os.path.exists(p_ent) else []
+            ch_ent_arr = np.loadtxt(ch_ent) if os.path.exists(ch_ent) else []
+            co_ent_arr = np.loadtxt(co_ent) if os.path.exists(co_ent) else []
+
+            plt.rcParams.update(
+                {
+                    "font.family": "serif",
+                    "font.size": 10,
+                    "axes.labelsize": 10,
+                    "legend.fontsize": 8,
+                    "figure.figsize": (5.2, 4.8),
+                    "figure.dpi": 300,
+                }
+            )
+
+            fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+
+            try:
+                from config import CFG
+                max_iters_p1 = CFG.epochs * CFG.iterations_epoch
+                fid_int = CFG.compute_and_save_fid_every_x_iter
+                ent_int = CFG.log_every_x_iter
+            except:
+                max_iters_p1 = 3000
+                fid_int = 10
+                ent_int = 10
+
+            idx_split = max_iters_p1
+            iters_p = np.arange(len(p_fid_arr)) * fid_int
+            iters_ch = max_iters_p1 + np.arange(len(ch_fid_arr)) * fid_int
+            iters_co = max_iters_p1 + np.arange(len(co_fid_arr)) * fid_int
+
+            # AX1: Fidelity and Entropy
+            ax1.plot(
+                np.concatenate((iters_p, iters_ch)),
+                np.concatenate((p_fid_arr, ch_fid_arr)),
+                color="black",
+                label=r"Fidelity $F$",
+            )
+            ax1.plot(iters_co, co_fid_arr, color="black", linestyle="--", alpha=0.4, label=r"Control $F$")
+            
+            if len(p_ent_arr) > 0 or len(ch_ent_arr) > 0:
+                len_p_ent = len(p_ent_arr) if len(p_ent_arr) > 0 else int(len(p_fid_arr) * fid_int / ent_int)
+                len_ch_ent = len(ch_ent_arr) if len(ch_ent_arr) > 0 else int(len(ch_fid_arr) * fid_int / ent_int)
+                
+                p_e = np.array(p_ent_arr) if len(p_ent_arr) > 0 else np.full(len_p_ent, np.nan)
+                ch_e = np.array(ch_ent_arr) if len(ch_ent_arr) > 0 else np.full(len_ch_ent, np.nan)
+                
+                iters_p_ent = np.arange(len_p_ent) * ent_int
+                iters_ch_ent = max_iters_p1 + np.arange(len_ch_ent) * ent_int
+                
+                ax1.plot(
+                    np.concatenate((iters_p_ent, iters_ch_ent)),
+                    np.concatenate((p_e, ch_e)),
+                    color="tab:red",
+                    label=r"Entropy $S(\rho)$",
+                )
+
+            if len(co_ent_arr) > 0:
+                iters_co_ent = max_iters_p1 + np.arange(len(co_ent_arr)) * ent_int
+                ax1.plot(iters_co_ent, co_ent_arr, color="tab:red", linestyle="--", alpha=0.4, label=r"Control $S(\rho)$")
+
+            ax1.axvline(x=idx_split, color="black", linestyle=":", label="Ancilla Added")
+            ax1.set_ylim(-0.01, 1.01)
+            ax1.set_ylabel(r"Observable ($F$, $S$)")
+            ax1.legend(loc="best")
+
+            # AX2: Negativities
+            colors = {
+                "1-2": "tab:blue",
+                "1-3": "tab:cyan",
+                "2-3": "tab:purple",
+                "1-a": "tab:red",
+                "2-a": "tab:orange",
+                "3-a": "tab:pink",
+            }
+            styles = {"1-2": "-", "1-3": "-", "2-3": "-", "1-a": "--", "2-a": "--", "3-a": "--"}
+
+            pairs = ["1-2", "1-3", "2-3", "1-a", "2-a", "3-a"]
+            has_negs = False
+            for pair in pairs:
+                # Load plateau negs
+                p_n_path = os.path.join(plateau_base, "fidelities", f"log_negativity_{pair.replace('-', '')}.txt")
+                ch_n_path = os.path.join(changed_base, "fidelities", f"log_negativity_{pair.replace('-', '')}.txt")
+                co_n_path = os.path.join(control_base, "fidelities", f"log_negativity_{pair.replace('-', '')}.txt")
+
+                p_n = np.loadtxt(p_n_path) if os.path.exists(p_n_path) else []
+                ch_n = np.loadtxt(ch_n_path) if os.path.exists(ch_n_path) else []
+                co_n = np.loadtxt(co_n_path) if os.path.exists(co_n_path) else []
+
+                if len(p_n) > 0 or len(ch_n) > 0:
+                    has_negs = True
+                    
+                    len_p_n = len(p_n) if len(p_n) > 0 else (len(p_ent_arr) if len(p_ent_arr) > 0 else int(len(p_fid_arr) * fid_int / ent_int))
+                    len_ch_n = len(ch_n) if len(ch_n) > 0 else (len(ch_ent_arr) if len(ch_ent_arr) > 0 else int(len(ch_fid_arr) * fid_int / ent_int))
+                    
+                    p_n = np.array(p_n) if len(p_n) > 0 else np.zeros(len_p_n)
+                    ch_n = np.array(ch_n) if len(ch_n) > 0 else np.zeros(len_ch_n)
+                    
+                    iters_p_n = np.arange(len_p_n) * ent_int
+                    iters_ch_n = max_iters_p1 + np.arange(len_ch_n) * ent_int
+                    
+                    ax2.plot(
+                        np.concatenate((iters_p_n, iters_ch_n)),
+                        np.concatenate((p_n, ch_n)),
+                        color=colors[pair],
+                        linestyle=styles[pair],
+                        label=f"Neg {pair}",
+                    )
+
+                    if len(co_n) > 0:
+                        iters_co_n = max_iters_p1 + np.arange(len(co_n)) * ent_int
+                        ax2.plot(iters_co_n, co_n, color=colors[pair], linestyle=":", alpha=0.4)
+
+            if has_negs:
+                ax2.axvline(x=idx_split, color="black", linestyle=":")
+                ax2.set_xlabel("Training iteration ($i$)")
+                ax2.set_ylabel(r"Negativity ($N$)")
+                ax2.legend(loc="best")
+            else:
+                ax2.set_visible(False)
+                ax1.set_xlabel("Training iteration ($i$)")
+
+            fig.tight_layout()
+            save_path = os.path.join(changed_base, "figures", "qgan_training_evolution_stitched.png")
+            fig.savefig(save_path)
+            plt.close(fig)
+    except Exception as e:
+        print_and_log(f"Failed to generate stitched plot {save_path}: {e}", log_path)
+
+    print_and_log(f"Saved all stitched evolution plots for run {run_idx}", log_path)
+
+
 def plot_recurrence_vs_fid(base_path, log_path, run_idx, max_fidelity, common_initial_plateaus):
     run_colors = plt.cm.tab10.colors  # Consistent palette for control and runs
     control_fids = (
@@ -253,7 +468,7 @@ def get_max_fidelity_from_file(fid_loss_path):
     try:
         data = np.loadtxt(fid_loss_path)
         if data.ndim == 1:
-            fidelities = data
+            fidelities = data[:len(data) // 2]
         else:
             fidelities = data[0] if data.shape[0] < data.shape[1] else data[:, 0]
         return np.max(fidelities)
@@ -383,7 +598,7 @@ def collect_fidelities_by_plateau_for_run(base_path, run_idx):
         rep_fid_path = os.path.join(root, "log_fidelity_loss.txt")
         rep_max = get_max_fidelity_from_file(rep_fid_path)
 
-        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "log_fidelity_loss.txt")
+        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "fidelities", "log_fidelity_loss.txt")
         init_max = get_max_fidelity_from_file(initial_log)
 
         candidates = [v for v in (rep_max, init_max) if v is not None]
@@ -424,7 +639,7 @@ def collect_fidelities_by_plateau_control(base_path):
         control_fid_path = os.path.join(root, "log_fidelity_loss.txt")
         control_max = get_max_fidelity_from_file(control_fid_path)
 
-        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "log_fidelity_loss.txt")
+        initial_log = os.path.join(base_path, f"initial_plateau_{plateau_num}", "fidelities", "log_fidelity_loss.txt")
         init_max = get_max_fidelity_from_file(initial_log)
 
         candidates = [v for v in (control_max, init_max) if v is not None]
