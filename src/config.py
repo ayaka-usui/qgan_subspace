@@ -43,11 +43,11 @@ class Config:
         # -- Training mode ----------------------------
         # use_choi: True = Choi representation, False = Haar random batching
         self.use_choi: bool = True
-        self.batch_size: int = 8  # Only for Haar/Comp random 
+        self.batch_size: int = 8  # Only for Haar/Comp random
         self.batch_mode: Literal["haar", "comp"] = "comp"
 
         self.eval_batch_size = 20
-        self.eval_seed = 1234   
+        self.eval_seed = 1234
 
         # Configurations to compare (each dict overrides CFG attributes):
         self.reps_new_config: list[dict[str, Any]] = [
@@ -59,7 +59,7 @@ class Config:
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": True,
                 "ancilla_coupling_layers": "all",
-                "ancilla_training": True
+                "ancilla_training": True,
             },
             {
                 "extra_ancilla": True,
@@ -69,7 +69,7 @@ class Config:
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": True,
                 "ancilla_coupling_layers": "all",
-                "ancilla_training": True
+                "ancilla_training": True,
             },
             {
                 "extra_ancilla": True,
@@ -79,13 +79,13 @@ class Config:
                 "do_ancilla_1q_gates": True,
                 "start_ancilla_gates_randomly": True,
                 "ancilla_coupling_layers": "all",
-                "ancilla_training": True
+                "ancilla_training": True,
             },
         ]
 
         # -- Loading and warm start ----------------------------
         # Load a previous run by timestamp. Supports \pm 1 qubit (ancilla add/remove).
-        self.load_timestamp: Optional[str] = None # -- "" <------------
+        self.load_timestamp: Optional[str] = None  # -- "" <------------
         self.type_of_warm_start: Literal["none", "all", "some"] = "none"
         self.warm_start_strength: Optional[float] = 0.1
 
@@ -127,7 +127,7 @@ class Config:
         #   trace   : the critic sees rho = Tr_a |g><g| = |g_0><g_0| + |g_1><g_1| (no ancilla row; the cost is
         #             linear in rho, so it is evaluated exactly on the two branches; no sampling)
         self.system_size: int = 3
-        self.extra_ancilla: bool = False # We begin with no extra qubits, but we add once we reach the Plateau
+        self.extra_ancilla: bool = False  # We begin with no extra qubits, but we add once we reach the Plateau
         self.gen_layers: int = 1
         # Ancilla mode define what happens to the ancilla before Discriminator (ancilla.py)
         self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "pass"
@@ -209,8 +209,8 @@ class Config:
         #   Available: I, X, Y, Z, XX, XZ, ZZ, ZZZ, ZZZZ, XZX, XXXX
         self.time_to_evolve: float = 1.0  # Time to evolve with the Hamiltonian, for the target state preparation.
         self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "ising_h", "custom_h"] = "custom_h"
-        self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ","XXX"]
-        self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0,0.4]
+        self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ", "XXX"]
+        self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0, 0.4]
         # -- Optimiser --------------------------------------
         self.l_rate: float = 0.01
         self.momentum_coeff: float = 0.9
@@ -228,8 +228,17 @@ class Config:
 
     # Fields computed from others (never set directly) and run-specific paths (not part of a preset)
     _DERIVED = ("s", "cst1", "cst2", "cst3")
-    _PATHS = ("run_timestamp", "base_data_path", "figure_path", "model_gen_path", "model_dis_path", "log_path",
-              "fid_loss_path", "entropy_path", "gen_final_params_path")
+    _PATHS = (
+        "run_timestamp",
+        "base_data_path",
+        "figure_path",
+        "model_gen_path",
+        "model_dis_path",
+        "log_path",
+        "fid_loss_path",
+        "entropy_path",
+        "gen_final_params_path",
+    )
 
     def _derive(self) -> None:
         """Constants of the regulariser from lamb (e^{-C/2λ} = (1-u) I + u SWAP)."""
