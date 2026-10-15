@@ -11,45 +11,47 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Persistence and file management system — PennyLane version.
+It ensures that we do not lose anything during training
+and that the results are organised so we you can compare them later.
+
+Changes from original:
+    - The function 'save_gen_final_params(gen, file_path)'
+"""
 
 import os
-import pickle
 
 import numpy as np
 
 
 def train_log(param, file_path):
+    """It ensures that the folder where you are going to save the file exists.
+    If it does not exist, it creates it."""
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "a") as file:
+    with open(file_path, "a") as file:  # Opens it in 'append' mode
         file.write(param)
 
 
 def print_and_log(param, file_path):
+    """Display the message on terminal (print) and at the same time save it
+    to the file using the previous function."""
     print(param)  # Console feedback
     train_log(param, file_path)  # Logging to file
 
 
 def print_and_log_with_headers(param, file_path):
+    """Simply add aesthetic lines (====) before and after the message."""
     print_and_log(f"\n{'=' * 60}", file_path)
     print_and_log(param, file_path)
     print_and_log(f"\n{'=' * 60}", file_path)
 
 
-# Not used, changed by specific gen and dis load_model_params methods:
-# def load_model(file_path):
-#     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-#     with open(file_path, "rb") as qc:
-#         model = pickle.load(qc)
-#     return model
-
-
-def save_model(model, file_path):
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "wb+") as file:
-        pickle.dump(model, file)
-
-
 def save_fidelity_loss(fidelities_history, losses_history, file_path):
+    """Save two lists of numbers: fidelities and losses.
+    Use np.savetxt, which saves data in plain text format (a column of numbers). This is ideal for
+    later plotting with Matplotlib (plot_hub.py or replot.py)
+    If the file already exists, delete it (os.remove) to write the new data from scratch."""
     if os.path.exists(file_path):
         os.remove(file_path)
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -91,15 +93,20 @@ def save_negativity(negativity_history, file_path):
 
 
 def save_gen_final_params(gen, file_path):
+    """This function is specific for the Quantum Generator.
+    It does not save the entire object, only the final angles of the logic gates.
+    Changed because in PennyLane gen.params (gen.qc.gates in previous code)
+    is already a flat array of angles"""
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    array_angle = np.zeros(len(gen.qc.gates))
-    for i, gate_i in enumerate(gen.qc.gates):
-        array_angle[i] = gate_i.angle
-    np.savetxt(file_path, array_angle)
+    np.savetxt(file_path, gen.params.detach().numpy())
+    # np.savetxt(file_path, gen.params)
 
 
 def get_last_experiment_idx(base_path, common_initial_plateaus):
-    """Return the highest experiment index in experimentX or initial_plateau_1/repeated_changed_runX folders under base_path."""
+    """Return the highest experiment index in experimentX or
+    initial_plateau_1/repeated_changed_runX folders under base_path,
+    preventing us from overwriting previous experiments if we run the code multiple times."""
+
     base_path = f"{base_path}/initial_plateau_1" if common_initial_plateaus else base_path
     start_with = "repeated_changed_run" if common_initial_plateaus else "experiment"
     experiment_dirs = [
