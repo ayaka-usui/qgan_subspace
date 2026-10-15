@@ -8,3 +8,5 @@ generated_data/
 *cache*
 .DS_Store
 *test*
+analysis/
+*summary*
