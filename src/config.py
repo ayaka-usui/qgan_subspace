@@ -132,7 +132,8 @@ class Config:
         #   - max_fidelity: Stopping criterion for fidelity (default: ~0.99)
         #
         #   - compute_entanglement: Whether to compute the ancilla entanglement entropy at each iteration
-        #       and display it in the live iteration plots (only meaningful when `extra_ancilla` is enabled).
+        #       and display it in the live iteration plots (only meaningful when `extra_ancilla` is enabled),
+        #       and all the qubit pairwise negativities (meaningful both for `extra_ancilla` enabled and disabled).
         #
         #   - steps_gen/dis: Discriminator (first) and Generator (second) update steps in each iter (1~5).
         #
