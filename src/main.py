@@ -11,15 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Main module for running the quantum GAN training."""
+"""Main module for running the quantum GAN training"""
 
 from config import CFG
 from tools.training_init import run_multiple_trainings, run_single_training
 
-
-##############################################################
-# SINGLE RUN mode
-##############################################################
+# -- SINGLE RUN mode ---------------------------
 def main():
     if CFG.run_multiple_experiments:
         run_multiple_trainings()
