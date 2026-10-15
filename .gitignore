@@ -19,4 +19,4 @@ variance_analysis/
 
 # Managed outside the repository for now
 docs/
-src/analysis/
+analysis/
