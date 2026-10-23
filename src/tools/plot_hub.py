@@ -19,7 +19,7 @@ import re
 import matplotlib as mpl
 import numpy as np
 
-from tools.data.data_managers import print_and_log
+from tools.data_managers import print_and_log
 
 mpl.use("Agg")
 import matplotlib.patheffects as pe
@@ -168,8 +168,6 @@ def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plate
     """
     Generates APS-style stitched plots comparing the changed run to the control run.
     """
-    import logging
-    
     try:
         for intial_plateau_idx in range(1, 100):
             plateau_base = os.path.join(base_path, f"initial_plateau_{intial_plateau_idx}") if common_initial_plateaus else base_path
@@ -220,8 +218,8 @@ def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plate
             try:
                 from config import CFG
                 max_iters_p1 = CFG.epochs * CFG.iterations_epoch
-                fid_int = CFG.compute_and_save_fid_every_x_iter
-                ent_int = CFG.log_every_x_iter
+                fid_int = CFG.save_fid_and_loss_every_x_iter
+                ent_int = fid_int  # entropy/negativity are computed at the fidelity cadence
             except:
                 max_iters_p1 = 3000
                 fid_int = 10
@@ -278,7 +276,12 @@ def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plate
             }
             styles = {"1-2": "-", "1-3": "-", "2-3": "-", "1-a": "--", "2-a": "--", "3-a": "--"}
 
-            pairs = ["1-2", "1-3", "2-3", "1-a", "2-a", "3-a"]
+            try:
+                from qgan.ancilla import negativity_pairs
+
+                pairs = [label for label, _, _ in negativity_pairs(CFG.system_size, True)]
+            except Exception:
+                pairs = ["1-2", "1-3", "2-3", "1-a", "2-a", "3-a"]
             has_negs = False
             for pair in pairs:
                 # Load plateau negs
@@ -305,14 +308,14 @@ def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plate
                     ax2.plot(
                         np.concatenate((iters_p_n, iters_ch_n)),
                         np.concatenate((p_n, ch_n)),
-                        color=colors[pair],
-                        linestyle=styles[pair],
+                        color=colors.get(pair),
+                        linestyle=styles.get(pair, "--" if pair.endswith("-a") else "-"),
                         label=f"Neg {pair}",
                     )
 
                     if len(co_n) > 0:
                         iters_co_n = max_iters_p1 + np.arange(len(co_n)) * ent_int
-                        ax2.plot(iters_co_n, co_n, color=colors[pair], linestyle=":", alpha=0.4)
+                        ax2.plot(iters_co_n, co_n, color=colors.get(pair), linestyle=":", alpha=0.4)
 
             if has_negs:
                 ax2.axvline(x=idx_split, color="black", linestyle=":")
@@ -725,9 +728,15 @@ def scatter_plot(base_path, log_path, n_runs, max_fidelity, run_names=None, x_la
             ax1.scatter(xs, [v * 100 for v in vals], color="gray", alpha=0.4, s=18, zorder=3)
         avg_f = (np.nanmean(vals) * 100) if vals else 0.0
         avg_s = (100.0 * np.sum(np.array(vals) >= max_fidelity) / tries) if tries > 0 else 0.0
+        std_f = (np.nanstd(vals) * 100) if vals and len(vals) > 1 else 0.0
         avg_fid_percent.append(avg_f)
         avg_success_percent.append(avg_s)
-
+        ax2.errorbar(
+            [run_idx], [avg_f], yerr=[std_f],
+            fmt="o", color="green", ecolor="green",
+            markeredgecolor="black", markersize=8,
+            elinewidth=1.5, capsize=4, zorder=3,
+        )        
         # Centered overlays on right axis (percent)
         ax2.scatter([run_idx], [avg_f], color="green", edgecolors="black", linewidths=0.5, s=60, zorder=3)
         ax2.scatter([run_idx], [avg_s], color="red", marker="D", s=50, zorder=3)
@@ -849,8 +858,15 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
         if control_vals_flat:
             overall_fid = float(np.nanmean(control_vals_flat)) * 100.0
             overall_succ = 100.0 * np.sum(np.array(control_vals_flat) >= max_fidelity) / len(control_vals_flat)
+            std_fid_control = float(np.nanstd(control_vals_flat)) * 100.0 if len(control_vals_flat) > 1 else 0.0
             ax.scatter([0], [overall_fid], color="green", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=5)
             ax2.scatter([0], [overall_succ], color="red", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=5)
+            ax.errorbar(
+                [0], [overall_fid], yerr=[std_fid_control],
+                fmt="s", color="green", ecolor="blue",
+                markeredgecolor="blue", markersize=8,
+                elinewidth=1.5, capsize=4, zorder=5,
+            )
             # value tags
             t_f = ax.text(
                 0 + 0.1,
@@ -893,8 +909,15 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
         if all_vals:
             overall_fid = float(np.nanmean(all_vals)) * 100.0
             overall_succ = 100.0 * np.sum(np.array(all_vals) >= max_fidelity) / len(all_vals)
+            std_fid = float(np.nanstd(all_vals)) * 100.0 if len(all_vals) > 1 else 0.0
             # Avg fidelity (green circle) + tag on left axis
             ax.scatter([run_idx], [overall_fid], color="green", edgecolors="black", linewidths=0.5, s=60, zorder=5)
+            ax.errorbar(
+                [run_idx], [overall_fid], yerr=[std_fid],
+                fmt="o", color="green", ecolor="green",
+                markeredgecolor="black", markersize=8,
+                elinewidth=1.5, capsize=4, zorder=5,
+            )            
             t = ax.text(
                 run_idx + 0.1,
                 overall_fid,
@@ -975,7 +998,7 @@ def scatter_plateau_clouds(base_path, log_path, n_runs, max_fidelity, run_names=
             label="Control (both)",
         ),
     ]
-    plt.legend(handles=handles, loc="best")
+    plt.legend(handles=handles, loc="lower left")
 
     save_path = os.path.join(base_path, "scatter_plateau_clouds.png")
     plt.tight_layout()
@@ -998,7 +1021,7 @@ def scatter_plateau_avg_fidelity(base_path, log_path, n_runs, max_fidelity, run_
     ax = plt.gca()
     ax.axhline(100 * max_fidelity, color="C0", linestyle="-", label=f"max_fidelity={max_fidelity}")
     plateau_ids = _collect_all_plateau_ids(base_path)
-    cmap = plt.cm.get_cmap("tab20", max(1, len(plateau_ids)))
+    cmap = plt.get_cmap("tab20", max(1, len(plateau_ids)))
     plateau_colors = {pid: cmap(i % cmap.N) for i, pid in enumerate(plateau_ids)}
     line_colors = {pid: _pastelize(plateau_colors[pid], 0.5) for pid in plateau_ids}
 
@@ -1136,7 +1159,7 @@ def scatter_plateau_success(base_path, log_path, n_runs, max_fidelity, run_names
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
     plateau_ids = _collect_all_plateau_ids(base_path)
-    cmap = plt.cm.get_cmap("tab20", max(1, len(plateau_ids)))
+    cmap = plt.get_cmap("tab20", max(1, len(plateau_ids)))
     plateau_colors = {pid: cmap(i % cmap.N) for i, pid in enumerate(plateau_ids)}
     line_colors = {pid: _pastelize(plateau_colors[pid], 0.5) for pid in plateau_ids}
 
@@ -1279,7 +1302,14 @@ def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names
         control_tries = len(control_vals)
         avg_fid = float(np.nanmean(control_vals)) * 100.0
         avg_succ = 100.0 * np.sum(np.array(control_vals) >= max_fidelity) / control_tries if control_tries > 0 else 0.0
+        std_fid_control = float(np.nanstd(control_vals)) * 100.0 if len(control_vals) > 1 else 0.0
         # Control as blue squares centered at x=0 on both axes
+        ax1.errorbar(
+            [0], [avg_fid], yerr=[std_fid_control],
+            fmt="s", color="green", ecolor="blue",
+            markeredgecolor="blue", markersize=8,
+            elinewidth=1.5, capsize=4, zorder=4,
+        )
         ax1.scatter([0], [avg_fid], color="green", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=4)
         ax2.scatter([0], [avg_succ], color="red", marker="s", edgecolors="blue", linewidths=0.5, s=60, zorder=4)
         # value tags
@@ -1318,10 +1348,17 @@ def scatter_plateau_overall(base_path, log_path, n_runs, max_fidelity, run_names
         tries = len(vals)
         avg_fid = float(np.nanmean(vals) * 100.0) if vals else 0.0
         avg_succ = (100.0 * np.sum(np.array(vals) >= max_fidelity) / tries) if tries > 0 else 0.0
+        std_fid = float(np.nanstd(vals) * 100.0) if vals and len(vals) > 1 else 0.0
 
         # Only if there is data for this run
         if tries > 0:
             # Avg fidelity on left (green circle)
+            ax1.errorbar(
+                [run_idx], [avg_fid], yerr=[std_fid],
+                fmt="o", color="green", ecolor="green",
+                markeredgecolor="black", markersize=8,
+                elinewidth=1.5, capsize=4, zorder=3,
+            )
             ax1.scatter([run_idx], [avg_fid], color="green", edgecolors="black", linewidths=0.5, s=60)
             # Avg success on right (red diamond)
             ax2.scatter([run_idx], [avg_succ], color="red", marker="D", s=55)

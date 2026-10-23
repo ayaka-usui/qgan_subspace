@@ -16,7 +16,7 @@
 
 import os
 
-from tools.data.data_managers import get_last_experiment_idx
+from tools.data_managers import get_last_experiment_idx
 from tools.plot_hub import find_if_common_initial_plateaus, generate_all_plots
 
 #######################################################################

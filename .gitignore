@@ -1,12 +1,22 @@
-# Virtual environments
-.venv
-
-# Generated files
+*.txt
+*.png
+*.jpg
+*.pdf
+*.pkl
+*.pyc
 generated_data/
+generated_data
+.DS_Store
+.venv
+*cache*
+.vscode/
+variance_analysis/
+# Virtual environments
+# Generated files
 *data/
 *log*
-*cache*
-.DS_Store
 *test*
+
+# Managed outside the repository for now
+docs/
 analysis/
-*summary*

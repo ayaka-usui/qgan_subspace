@@ -11,46 +11,42 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Training initialization module for running training instances"""
 
 import itertools
 import os
+import re
 import shutil
 import traceback
 
 import numpy as np
 
 from config import CFG
-from qgan.training import Training
-from tools.data.data_managers import get_last_experiment_idx, print_and_log, print_and_log_with_headers
+from qgan.training import Training  ##########
+from tools.data_managers import get_last_experiment_idx, print_and_log, print_and_log_with_headers
 from tools.plot_hub import generate_all_plots
 
 # ruff: noqa: E226
+# indicates that the linter (a program that automatically checks code quality)
+# should not check this line. Any warnings that code may have generated will be ignored.
 
 
-#################################################################################################################
-# SINGLE RUN MODE:
-#################################################################################################################
+# -- SINGLE RUN MODE ------------------------------------------
 def run_single_training():
     """
     Runs a single training instance.
     """
-    print_and_log("Running in SINGLE RUN mode.\n", CFG.log_path)
+    print_and_log("Running in SINGLE RUN mode: \n", CFG.log_path)
 
     try:
-        ##############################################################
         # Run single training instance with specified configuration
-        ##############################################################
         training_instance = Training()
         training_instance.run()
         success_msg = "\nDefault configuration run COMPLETED SUCCESSFULLY.\n"
         print_and_log(success_msg, CFG.log_path)  # Log to file
 
     except Exception as e:  # noqa: BLE001
-        ##############################################################
         # Handle exceptions during the training run
-        ##############################################################
         tb_str = traceback.format_exc()
         error_msg = (
             f"\n{'-' * 60}\n"
@@ -63,9 +59,7 @@ def run_single_training():
         print_and_log(error_msg, CFG.log_path)  # Log to file
 
 
-#################################################################################################################
-# MULTIPLE RUNS MODE, WITH AND WITHOUT COMMON INITIAL EXPERIMENTS:
-#################################################################################################################
+# -- MULTIPLE RUNS MODE, WITH AND WITHOUT COMMON INITIAL EXPERIMENTS: --------------
 def run_multiple_trainings():
     """Runs the multiple training logic, both for common initial plateaus
     with later changes, and for no common initial plateaus.
@@ -76,17 +70,13 @@ def run_multiple_trainings():
     It also generates plots for all runs after completion, and raises the necessary
     exceptions if any errors occur during the training.
     """
-    ##############################################################
-    # Loading previous MULTIPLE run timestamp if specified:
-    ##############################################################
+    # -- Loading previous MULTIPLE run timestamp if specified:
     if CFG.load_timestamp is not None:
         if CFG.common_initial_plateaus:
             _check_for_previous_multiple_runs()
         CFG.run_timestamp = CFG.load_timestamp
 
-    ################################################################
-    # Change results directory to MULTIPLE RUNS:
-    ################################################################
+    # -- Change results directory to MULTIPLE RUNS:
     base_path = f"./generated_data/{CFG.run_timestamp}"
     CFG.base_data_path = base_path
     CFG.set_results_paths()
@@ -102,18 +92,14 @@ def run_multiple_trainings():
         config_str = ", ".join(f"{key}: {value}" for key, value in config_dict.items())
         print_and_log(f"- {config_str}\n", CFG.log_path)
 
-    ##############################################################
-    # Execute multiple training instances (with/out common initial exp.)
-    ##############################################################
+    # -- Execute multiple training instances (with/out common initial exp.)
     try:
         if CFG.common_initial_plateaus:
             execute_from_common_initial_plateaus(base_path)
         else:
             execute_from_no_common_initial_plateaus(base_path)
 
-        ##############################################################
-        # Generate plots for all runs
-        ##############################################################
+        # -- Generate plots for all runs
         generate_all_plots(
             base_path,
             CFG.log_path,
@@ -122,11 +108,11 @@ def run_multiple_trainings():
             common_initial_plateaus=CFG.common_initial_plateaus,
         )
         print_and_log("\nAll multiple training runs completed.\n", CFG.log_path)
-        print_and_log("\nAnalysis plots (recurrence vs max fidelity, averages, and success rates) generated.\n", CFG.log_path)
+        print_and_log(
+            "\nAnalysis plots (recurrence vs max fidelity, averages, and success rates) generated.\n", CFG.log_path
+        )
 
-    ##############################################################
-    # Handle exceptions during the training run
-    ##############################################################
+    # -- Handle exceptions during the training run
     except Exception as e:
         tb_str = traceback.format_exc()
         error_msg = (
@@ -140,6 +126,12 @@ def run_multiple_trainings():
         print_and_log(error_msg, CFG.log_path)
 
 
+# Options that no longer exist, with the value this code always uses: earlier logs list them, so their lines are
+# dropped before comparing (any other value means a setting this code does not have).
+_REMOVED_OPTIONS = {"gate_convention": "uniform", "dis_gradient": "exact", "dis_init_scale": "None",
+                    "ancilla_coupling_terms": "None", "ancilla_init_angle_scale": "None"}
+
+
 def _check_for_previous_multiple_runs():
     # Check config compatibility
     prev_log_path = f"./generated_data/{CFG.load_timestamp}/initial_plateau_1/logs/log.txt"
@@ -147,15 +139,22 @@ def _check_for_previous_multiple_runs():
         raise RuntimeError(f"Previous run log not found: {prev_log_path}")
     with open(prev_log_path, "r") as f:
         log_content = f.read()
+    for key, value in _REMOVED_OPTIONS.items():
+        log_content = re.sub(rf"^{key}: {re.escape(value)}\n", "", log_content, flags=re.M)
+        if re.search(rf"^{key}: ", log_content, flags=re.M):
+            raise RuntimeError(f"The previous run used {key} != {value}, which this code no longer has. Aborting.")
     # Only check for a subset of config fields (excluding run_timestamp and load_timestamp.)
     config_str = CFG.show_data()
     if config_str.split("type_of_warm_start")[1] not in log_content:
-        raise RuntimeError("Current config does not match previous initial plateaus. Aborting.")
+        old_lines = set(log_content.splitlines())
+        differ = [line for line in config_str.split("type_of_warm_start")[1].splitlines()[1:]
+                  if line.strip() and line not in old_lines]
+        raise RuntimeError("Current config does not match previous initial plateaus ("
+                           + ("now " + "; ".join(differ[:5]) + ", not in the previous log" if differ else
+                              "the same lines in another order") + "). Aborting.")
 
 
-#############################################################################
-# Execute multiple training instances with no common initial plateaus
-#############################################################################
+# -- Execute multiple training instances with no common initial plateaus
 def execute_from_no_common_initial_plateaus(base_path):
     """
     Runs multiple experiments from scratch (no common initial plateaus),
@@ -173,20 +172,20 @@ def execute_from_no_common_initial_plateaus(base_path):
 
     for run_idx, config_dict in enumerate(CFG.reps_new_config, 1):
         new_run_idx = last_idx + run_idx
-        for key, value in config_dict.items():
-            setattr(CFG, key, value)
-        for rep in range(n_reps):
-            out_dir = f"{base_path}/experiment{new_run_idx}/{rep + 1}"
-            CFG.base_data_path = out_dir
-            CFG.set_results_paths()
-            print_and_log_with_headers(f"\nExperiment {new_run_idx}, repetition {rep + 1}/{n_reps}", CFG.log_path)
-            Training().run()
-            print_and_log(f"\nExperiment {new_run_idx}, repetition {rep + 1} completed.\n", CFG.log_path)
+        CFG.update(**config_dict)  # (checked, and derived values such as the paths and cst1-3 recomputed)
+        specs = [
+            {
+                "base_data_path": f"{base_path}/experiment{new_run_idx}/{rep + 1}",
+                "load_timestamp": CFG.load_timestamp,  # (None, unless this config sets it)
+                "header": f"\nExperiment {new_run_idx}, repetition {rep + 1}/{n_reps}",
+                "done": f"\nExperiment {new_run_idx}, repetition {rep + 1} completed.\n",
+            }
+            for rep in range(n_reps)
+        ]
+        _train_runs(specs)
 
 
-#############################################################################
 # Execute multiple training instances with common initial plateaus
-#############################################################################
 def execute_from_common_initial_plateaus(base_path):
     """
     Runs multiple training instances, with a change in the middle.
@@ -205,31 +204,24 @@ def execute_from_common_initial_plateaus(base_path):
     # Find the last run index if loading previous multiple runs
     last_idx = 0 if CFG.load_timestamp is None else get_last_experiment_idx(base_path, common_initial_plateaus=True)
 
-    #############################################################
-    # Run initial plateaus
-    #############################################################
+    # -- Run initial plateaus --------------
     if CFG.load_timestamp is None:
         print_and_log("\nRunning initial plateaus.\n", CFG.log_path)
         _run_initial_plateaus(N_initial_plateaus, base_path)
     else:
         print_and_log("\nFollowing previous MULTIPLE run, initial plateaus will be skipped.\n", CFG.log_path)
 
-    #############################################################
-    # Run controls from each initial plateau
-    #############################################################
+    # -- Run controls from each initial plateau --------------
     if CFG.load_timestamp is None:
         print_and_log("\nRunning control experiments on plateaus.\n", CFG.log_path)
         _run_repeated_experiments(N_initial_plateaus, N_reps_each_init_plateau, base_path, "control")
     else:
         print_and_log("\nFollowing previous MULTIPLE run, control experiments will be skipped.\n", CFG.log_path)
 
-    #############################################################
-    # Run changed experiments from each initial plateau, for each config in reps_new_config:
-    #############################################################
+    # -- Run changed experiments from each initial plateau, for each config in reps_new_config:
     for run_idx, config_dict in enumerate(CFG.reps_new_config, 1):
         new_run_idx = last_idx + run_idx
-        for key, value in config_dict.items():
-            setattr(CFG, key, value)
+        CFG.update(**config_dict)  # (checked, and derived values such as the paths and cst1-3 recomputed)
         # Each config gets its own run subdir
         print_and_log(f"\nRunning changed_run{new_run_idx}.\n", CFG.log_path)
         _run_repeated_experiments(N_initial_plateaus, N_reps_each_init_plateau, base_path, f"changed_run{new_run_idx}")
@@ -244,36 +236,45 @@ def _run_initial_plateaus(N_initial_plateaus: int, base_path: str):
     attempt = 0
     max_fid = getattr(CFG, "max_fidelity", 0.99)
     while kept < N_initial_plateaus:
-        attempt += 1
-        # Set path for initial plateau (use attempt index for uniqueness)
-        exp_dir = f"{base_path}/initial_plateau_{kept + 1}"
-        temp_dir = f"{base_path}/initial_plateau_attempt_{attempt}"
-        CFG.base_data_path = temp_dir
-        CFG.set_results_paths()
-        print_and_log_with_headers(f"\nInitial Plateau Attempt {attempt} (kept {kept + 1}/{N_initial_plateaus})", CFG.log_path)
-        Training().run()
-        print_and_log(f"\nInitial Plateau Attempt {attempt} completed. Checking fidelity...\n", CFG.log_path)
-        # Check final fidelity
-        fid_file = os.path.join(temp_dir, "fidelities", "log_fidelity_loss.txt")
-        if os.path.exists(fid_file):
-            try:
-                data = np.loadtxt(fid_file)
-                if data.ndim == 1:
-                    fids = data
-                else:
-                    fids = data[0] if data.shape[0] < data.shape[1] else data[:, 0]
-                max_found = np.max(fids)
-            except Exception:
+        # The next attempts: one at a time, or all those still needed trained together (CFG.parallel_runs)
+        n_attempts = N_initial_plateaus - kept if CFG.parallel_runs else 1
+        specs = []
+        for k in range(n_attempts):
+            attempt += 1
+            specs.append(
+                {
+                    # Set path for initial plateau (use attempt index for uniqueness)
+                    "base_data_path": f"{base_path}/initial_plateau_attempt_{attempt}",
+                    "load_timestamp": None,
+                    "header": f"\nInitial Plateau Attempt {attempt} (kept {kept + k + 1}/{N_initial_plateaus})",
+                    "done": f"\nInitial Plateau Attempt {attempt} completed. Checking fidelity...\n",
+                }
+            )
+        _train_runs(specs)
+        for spec in specs:  # in the order of the attempts
+            temp_dir = spec["base_data_path"]
+            exp_dir = f"{base_path}/initial_plateau_{kept + 1}"
+            # Check final fidelity
+            fid_file = os.path.join(temp_dir, "fidelities", "log_fidelity_loss.txt")
+            if os.path.exists(fid_file):
+                try:
+                    data = np.loadtxt(fid_file)
+                    if data.ndim == 1:  # single column [fidelities..., losses...] -> keep fidelities only
+                        fids = data[: len(data) // 2]
+                    else:
+                        fids = data[0] if data.shape[0] < data.shape[1] else data[:, 0]
+                    max_found = np.max(fids)
+                except Exception:
+                    max_found = 0
+            else:
                 max_found = 0
-        else:
-            max_found = 0
-        if max_found < max_fid:
-            # Keep this plateau: rename to sequential initial_plateau_X
-            os.rename(temp_dir, exp_dir)
-            kept += 1
-        else:
-            # Remove this experiment
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            if max_found < max_fid:
+                # Keep this plateau: rename to sequential initial_plateau_X
+                os.rename(temp_dir, exp_dir)
+                kept += 1
+            else:
+                # Remove this experiment
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     # Set the base path to the root directory of the initial plateaus
     CFG.base_data_path = base_path
@@ -281,7 +282,9 @@ def _run_initial_plateaus(N_initial_plateaus: int, base_path: str):
     print_and_log(f"\nFinished collecting {N_initial_plateaus} initial plateaus below threshold.\n", CFG.log_path)
 
 
-def _run_repeated_experiments(N_initial_plateaus: int, N_reps_each_init_plateau: int, base_path: str, changed_or_control: str):
+def _run_repeated_experiments(
+    N_initial_plateaus: int, N_reps_each_init_plateau: int, base_path: str, changed_or_control: str
+):
     # changed_or_control can now be 'control' or 'changed_runX'
     is_changed = changed_or_control.startswith("changed_run")
     run_idx = None
@@ -292,22 +295,41 @@ def _run_repeated_experiments(N_initial_plateaus: int, N_reps_each_init_plateau:
     if changed_or_control == "control":
         N_reps_each_init_plateau = 1
 
+    specs = []
     for i, rep in itertools.product(range(N_initial_plateaus), range(N_reps_each_init_plateau)):
         if changed_or_control == "control":
             out_dir = f"{base_path}/initial_plateau_{i + 1}/repeated_control"
         elif is_changed:
             out_dir = f"{base_path}/initial_plateau_{i + 1}/repeated_changed_run{run_idx}/{rep + 1}"
         else:
-            raise ValueError(f"Invalid value for changed_or_control: {changed_or_control} (!= 'control', 'changed_runX').")
-        CFG.load_timestamp = f"{CFG.run_timestamp}/initial_plateau_{i + 1}"
-        CFG.base_data_path = out_dir
-        CFG.set_results_paths()
-        print_and_log_with_headers(
-            f"\nRepeated Experiments {changed_or_control} {rep + 1}/{N_reps_each_init_plateau} for Initial Plateau {i + 1}",
-            CFG.log_path,
+            raise ValueError(
+                f"Invalid value for changed_or_control: {changed_or_control} (!= 'control', 'changed_runX')."
+            )
+        specs.append(
+            {
+                "base_data_path": out_dir,
+                "load_timestamp": f"{CFG.run_timestamp}/initial_plateau_{i + 1}",
+                "header": f"\nRepeated Experiments {changed_or_control} {rep + 1}/{N_reps_each_init_plateau} for Initial Plateau {i + 1}",
+                "done": f"\nRepeated Experiment {changed_or_control} {rep + 1} for Initial Plateau {i + 1} completed.\n",
+            }
         )
-        Training().run()
-        print_and_log(
-            f"\nRepeated Experiment {changed_or_control} {rep + 1} for Initial Plateau {i + 1} completed.\n",
-            CFG.log_path,
-        )
+    _train_runs(specs)
+
+
+# -- Training the runs: one after the other, or together (CFG.parallel_runs) ------------------------------------------
+def _train_runs(specs: list[dict]):
+    """Train the runs of `specs` (dicts with base_data_path, load_timestamp, header and done: the messages logged in
+    the run's log before and after it). With CFG.parallel_runs they are trained together, as many at a time as fit in
+    memory (qgan.parallel_training.ParallelTraining): the same results and files as one after the other."""
+    if not CFG.parallel_runs:
+        for spec in specs:
+            CFG.load_timestamp = spec["load_timestamp"]
+            CFG.base_data_path = spec["base_data_path"]
+            CFG.set_results_paths()
+            print_and_log_with_headers(spec["header"], CFG.log_path)
+            Training().run()
+            print_and_log(spec["done"], CFG.log_path)
+        return
+    from qgan.parallel_training import ParallelTraining
+
+    ParallelTraining(specs).run()
