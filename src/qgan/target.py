@@ -81,7 +81,7 @@ def construct_target(size: int, terms: list[str], strengths: list[float]) -> np.
     Returns:
         np.ndarray: the target Hamiltonian.
     """
-    H = np.zeros([2**size, 2**size])
+    H = np.zeros([2**size, 2**size], dtype=complex)
     for term_i, term in enumerate(terms):
         if term == "I":
             H += strengths[term_i] * np.identity(2**size)

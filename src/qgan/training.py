@@ -82,7 +82,7 @@ class Training:
             try:
                 p_base = os.path.join("generated_data", CFG.load_timestamp, "fidelities")
                 if os.path.exists(os.path.join(p_base, "log_fidelity_loss.txt")):
-                    data = np.loadtxt(os.path.join(p_base, "log_fidelity_loss.txt"))
+                    data = np.loadtxt(os.path.join(p_base, "log_fidelity_loss.txt")).reshape(2, -1)
                     plat_fids, plat_losses = list(data[0]), list(data[1])
                 if os.path.exists(os.path.join(p_base, "log_entropy.txt")):
                     plat_ents = list(np.loadtxt(os.path.join(p_base, "log_entropy.txt")))

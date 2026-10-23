@@ -85,7 +85,7 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg
     ent_line = []
     if show_entropy:
         ent_line = ax_left.plot(
-            range(len(entropies)),
+            range(len(fidelities) - len(entropies), len(fidelities)),
             entropies,
             color="tab:green",
             label="Entanglement entropy",

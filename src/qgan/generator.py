@@ -437,6 +437,7 @@ class Ansatz:
             # Then 2 qubit gates
             for i in range(size - 1):
                 qc.add_gate(QuantumGate("ZZ", i, i + 1, angle=0))
+            if CFG.extra_ancilla:
                 # Ancilla ancilla coupling (2q) logic
                 if CFG.ancilla_topology == "total":
                     for i in range(size):
