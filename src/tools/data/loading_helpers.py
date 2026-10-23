@@ -142,3 +142,4 @@ def apply_warm_start(training_instance):
         restart_X_percent_of_gen_params_randomly(training_instance.gen)
     else:
         raise ValueError(f"Unknown type of warm start: {CFG.type_of_warm_start}")
+    training_instance.gen.total_gen_state = training_instance.gen.get_total_gen_state()

@@ -259,7 +259,7 @@ def _run_initial_plateaus(N_initial_plateaus: int, base_path: str):
             try:
                 data = np.loadtxt(fid_file)
                 if data.ndim == 1:
-                    fids = data
+                    fids = data[: len(data) // 2]
                 else:
                     fids = data[0] if data.shape[0] < data.shape[1] else data[:, 0]
                 max_found = np.max(fids)
