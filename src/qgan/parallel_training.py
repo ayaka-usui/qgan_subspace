@@ -16,8 +16,7 @@
 BatchedQWGAN      R independent trainings of one circuit (Choi mode, local critic, the spectral evaluation) stepped
                   together: one broadcast circuit call for all the generators (PennyLane parameter broadcasting), one
                   call of the exact eigenbasis formula for all the critic gradients (qgan.dis_spectral), and one SGD
-                  step on the stacked parameters (elementwise, so each run's update is its own). The gradient analysis
-                  (analysis/gradient) trains with it too.
+                  step on the stacked parameters (elementwise, so each run's update is its own).
 ParallelTraining  the runs of one phase of tools.training_init (its specs), as many at a time as fit in memory
                   (max_runs_together): a run that stops (at the end of an epoch, as alone) leaves the batch, and the
                   next run of the phase takes its place. Everything else is the per-run code of qgan.training.Training
@@ -43,7 +42,6 @@ from concurrent.futures.process import BrokenProcessPool
 from types import SimpleNamespace
 from typing import Optional
 
-import numpy as np
 import torch
 
 from config import CFG
@@ -83,21 +81,19 @@ class BatchedQWGAN:
             optimiser, the first update is the same).
         freeze: the critic's last row (its ancilla row) keeps its value (dis_ancilla_row_trainable = False).
         mask: (P,) bool, False for the generator parameters that are not trained (ancilla_training = False).
-        cap: CFG.dis_module_cap of the critics (None: no cap); cap_now applies it at creation (as Discriminator).
+        cap: CFG.dis_module_cap of the critics (None: no cap), applied after every critic step.
         states: (R, D) generator outputs of theta, if known (else computed with one broadcast call).
     """
 
     def __init__(self, circuit, choi_input: torch.Tensor, target: torch.Tensor, theta, alpha, beta, *,
                  rdt: torch.dtype, sgd_gen: dict, sgd_dis: dict, buffers: Optional[tuple] = None, freeze: bool = False,
-                 mask: Optional[torch.Tensor] = None, cap: Optional[float] = None, cap_now: bool = False,
+                 mask: Optional[torch.Tensor] = None, cap: Optional[float] = None,
                  states: Optional[torch.Tensor] = None):
         self.circuit, self.choi_input, self.target, self.rdt = circuit, choi_input, target, rdt
         self.sgd_gen, self.sgd_dis = dict(sgd_gen), dict(sgd_dis)
         self.freeze, self.mask, self.cap = freeze, mask, cap
         self.theta, self.alpha, self.beta = _leaf(theta, rdt), _leaf(alpha, rdt), _leaf(beta, rdt)
         self._make_optimizers(buffers)
-        if cap_now:
-            self._cap()
         self.states = self.circuit_states(self.theta.detach()) if states is None else states.detach()
 
     # -- the stacked tensors and their optimisers ------------------------------------------------------------------
@@ -169,9 +165,9 @@ class BatchedQWGAN:
             for k in torch.nonzero(norm > self.cap * (1 - 1e-9)).flatten().tolist():  # capped_rows decides exactly
                 p[k] = capped_rows(p[k], self.cap, n_scaled)
 
-    def critic_step(self) -> tuple[np.ndarray, np.ndarray]:
-        """One critic step at the current (detached) generator outputs; returns the gradients used, (R, n, 4) each
-        (the optimiser minimises -W, so they are -dW/d(alpha, beta), the frozen row's set to zero)."""
+    def critic_step(self) -> None:
+        """One critic step at the current (detached) generator outputs (the optimiser minimises -W; a frozen row
+        keeps its value)."""
         self.opt_d.zero_grad()
         G = self.critic_states().detach()
         da, db = critic_gradients(G.cpu().numpy(), self.target.cpu().numpy(), self.alpha.detach().cpu().numpy(),
@@ -183,13 +179,11 @@ class BatchedQWGAN:
             self.alpha.grad[:, -1] = 0.0
             self.beta.grad[:, -1] = 0.0
             kept = (self.alpha.detach()[:, -1].clone(), self.beta.detach()[:, -1].clone())
-        grads = (self.alpha.grad.cpu().numpy().copy(), self.beta.grad.cpu().numpy().copy())
         self.opt_d.step()
         if kept is not None:
             with torch.no_grad():
                 self.alpha[:, -1], self.beta[:, -1] = kept
         self._cap()
-        return grads
 
     def spectrum(self) -> DisSpectrum:
         return DisSpectrum(self.alpha.detach().cpu().numpy(), self.beta.detach().cpu().numpy(), self.rdt, cdtype())
@@ -199,28 +193,12 @@ class BatchedQWGAN:
         total = self.states if theta is None else self.circuit_states(theta)
         return spectral_wasserstein(gen_branches_batched(total), self.target, self.spectrum())
 
-    def generator_step(self) -> torch.Tensor:
-        """One generator step with the current (detached) critics; returns the gradient used, (R, P)."""
+    def generator_step(self) -> None:
+        """One generator step with the current (detached) critics (theta.grad keeps the gradient used)."""
         self.opt_g.zero_grad()
         self.costs(self.theta).sum().backward()
-        grad = self.theta.grad.detach().clone()
         self.opt_g.step()
         self.states = self.circuit_states(self.theta.detach())
-        return grad
-
-    def gen_grad(self) -> np.ndarray:
-        """dW/dθ_k of every run at its current parameters and critic, (R, P), without an update."""
-        th = self.theta.detach().clone().requires_grad_(True)
-        self.costs(th).sum().backward()
-        return th.grad.detach().cpu().numpy().copy()
-
-    def fidelities(self) -> np.ndarray:
-        """(R,) |<t|g>|^2 of what the critic sees (project: the post-selected state), or sum_j |<t|g_j>|^2 (trace)."""
-        with torch.no_grad():
-            G = self.critic_states()
-            if G.dim() == 3:
-                return ((G @ self.target.conj()).abs() ** 2).sum(1).cpu().numpy()
-            return ((G @ self.target.conj()).abs() ** 2).cpu().numpy()
 
 
 # =====================================================================================================================
@@ -414,15 +392,10 @@ class ParallelTraining:
 
     # -- one iteration of every run (as Training._train_step_choi) -----------------------------------------------------
     def _step(self) -> None:
-        runs = [tr for _, tr in self.active]
         for _ in range(CFG.steps_dis):
-            grad_a, grad_b = self.engine.critic_step()
-            for k, tr in enumerate(runs):  # as Training._record_dis_grad
-                tr.dis.grad_history.append(np.concatenate([grad_a[k].ravel(), grad_b[k].ravel()]))
+            self.engine.critic_step()
         for _ in range(CFG.steps_gen):
-            grad = self.engine.generator_step().cpu().numpy()
-            for k, tr in enumerate(runs):  # as Generator.update_gen
-                tr.gen.grad_history.append(grad[k].copy())
+            self.engine.generator_step()
 
     @torch.no_grad()
     def _evaluate(self) -> list[tuple]:

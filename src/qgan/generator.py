@@ -350,7 +350,6 @@ class Generator:
             lr=CFG.l_rate,
             momentum=CFG.momentum_coeff,
         )
-        self.grad_history: list[np.ndarray] = []
             
     # -- parameter initialisation ------------------------------------------
     def _init_params(self, n_params: int) -> torch.Tensor:
@@ -511,10 +510,6 @@ class Generator:
             loss = self.compute_loss_batch(dis, batch_inputs, batch_targets)
 
         loss.backward()
-        # Vector containing information on the direction and magnitude
-        if self.params.grad is not None:
-            self.grad_history.append(
-                self.params.grad.detach().numpy().copy())
         self.optimizer.step()
 
         if CFG.use_choi:

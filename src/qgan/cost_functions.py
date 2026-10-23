@@ -82,58 +82,6 @@ def _calc_wasserstein_mixed(Gb, t, dis_matrices):
     return (psiterm - phiterm - regterm).real
 
 
-def batched_wasserstein(G: torch.Tensor, t: torch.Tensor, dis_matrices) -> torch.Tensor:
-    """Vectorised `_calc_wasserstein` for a batch of generator states sharing one discriminator.
-
-    Args:
-        G: (N, d) generator states (row n = |g_n>).
-        t: (d,) common target state, or (N, d) one target per row.
-        dis_matrices: (A, B, psi, phi) of a single discriminator.
-
-    Returns:
-        (N,) real tensor, entry n = _calc_wasserstein(G[n], t[n], dis_matrices).
-
-    G may also be (N, n_branches, d): mixed states rho_n = sum_j |g_nj><g_nj| (ancilla_mode "trace"), entry n =
-    _calc_wasserstein_mixed(G[n], t[n], dis_matrices).
-    """
-    if G.dim() == 3:
-        return _batched_wasserstein_mixed(G, t, dis_matrices)
-    A, B, psi, phi = dis_matrices
-    T = t.unsqueeze(0).expand_as(G) if t.dim() == 1 else t
-    Gc, Tc = G.conj(), T.conj()
-    AG, BG, PG = G @ A.T, G @ B.T, G @ phi.T  # row n = A g_n, B g_n, phi g_n
-    AT, BT, ST = T @ A.T, T @ B.T, T @ psi.T  # row n = A t_n, B t_n, psi t_n
-    term1 = (Gc * AG).sum(1) * (Tc * BT).sum(1)  # <g|A|g><t|B|t>
-    term2 = (Tc * AG).sum(1) * (Gc * BT).sum(1)  # <t|A|g><g|B|t>
-    term3 = (Gc * AT).sum(1) * (Tc * BG).sum(1)  # <g|A|t><t|B|g>
-    term4 = (Tc * AT).sum(1) * (Gc * BG).sum(1)  # <t|A|t><g|B|g>
-    psiterm = (Tc * ST).sum(1)
-    phiterm = (Gc * PG).sum(1)
-    regterm = (CFG.lamb / np.e) * (CFG.cst1 * term1 - CFG.cst2 * (term2 + term3) + CFG.cst3 * term4)
-    return (psiterm - phiterm - regterm).real
-
-
-def _batched_wasserstein_mixed(Gb: torch.Tensor, t: torch.Tensor, dis_matrices) -> torch.Tensor:
-    """Vectorised _calc_wasserstein_mixed for (N, n_branches, d) branch states sharing one discriminator."""
-    A, B, psi, phi = dis_matrices
-    N, nb, d = Gb.shape
-    T = t.unsqueeze(0).expand(N, -1) if t.dim() == 1 else t
-    Gc, Tc = Gb.conj(), T.conj()
-    AG, BG, PG = Gb @ A.T, Gb @ B.T, Gb @ phi.T  # (N, nb, d)
-    AT, BT, ST = T @ A.T, T @ B.T, T @ psi.T  # (N, d)
-    gAg = (Gc * AG).sum((1, 2))
-    gBg = (Gc * BG).sum((1, 2))
-    phiterm = (Gc * PG).sum((1, 2))
-    tAg = (AG * Tc.unsqueeze(1)).sum(-1)  # <t|A|g_j>, (N, nb)
-    gBt = (Gc * BT.unsqueeze(1)).sum(-1)  # <g_j|B|t>
-    term1 = gAg * (Tc * BT).sum(1)
-    term23 = 2 * (tAg * gBt).real.sum(1)
-    term4 = (Tc * AT).sum(1) * gBg
-    psiterm = (Tc * ST).sum(1)
-    regterm = (CFG.lamb / np.e) * (CFG.cst1 * term1 - CFG.cst2 * term23 + CFG.cst3 * term4)
-    return (psiterm - phiterm - regterm).real
-
-
 def compute_fidelity(final_target_state: torch.Tensor, final_gen_state: torch.Tensor) -> float:
     """Calculate the fidelity between target and generated states.
 

@@ -310,27 +310,6 @@ class Training:
         if self.anc_diag:
             np.savez(f"{CFG.base_data_path}/ancilla_diagnostics.npz", **{k: np.asarray(v) for k, v in self.anc_diag.items()})
 
-        # -- Save gradient history --
-        if self.gen.grad_history:
-            grad_array = np.stack(self.gen.grad_history, axis=0)
-            np.save(f"{CFG.base_data_path}/grad_history.npy", grad_array)
-            if self.gen.ancilla:
-                anc_idx = np.array(self.gen._get_ancilla_param_indices(),
-                                   dtype=int)
-                np.save(f"{CFG.base_data_path}/ancilla_indices.npy", anc_idx)
-            print_and_log(
-                f"\nSaved gradient history: shape {grad_array.shape}",
-                CFG.log_path,
-            )
-        # -- Save discriminator gradient history --
-        if self.dis.grad_history:
-            dis_grad_array = np.stack(self.dis.grad_history, axis=0)
-            np.save(f"{CFG.base_data_path}/dis_grad_history.npy", dis_grad_array)
-            print_and_log(
-                f"\nSaved discriminator gradient history: shape {dis_grad_array.shape}",
-                CFG.log_path,
-            )
-
     # -- Entanglement helpers --------------------------------------------
     def _choi_output_state(self) -> np.ndarray:
         """(I ⊗ U_gen)|Φ+>|0>: the cached generator state in Choi mode, rebuilt from U_gen in batch mode.
@@ -416,21 +395,6 @@ class Training:
                 self.dis.alpha[-1] = frozen[0]
                 self.dis.beta[-1] = frozen[1]
 
-    def _record_dis_grad(self, epoch_iter: Optional[int] = None) -> None:
-        """Record flat gradient vector over all discriminator parameters.
-
-        Global critic (up to 4^n coefficients per operator): only at the iterations where the fidelity is saved
-        (every save_fid_and_loss_every_x_iter), to keep dis_grad_history.npy small.
-        """
-        if self.dis.dis_type == "global" and epoch_iter is not None and epoch_iter % CFG.save_fid_and_loss_every_x_iter:
-            return
-        pieces = []
-        for p in self.dis.parameters():
-            if p.grad is not None:
-                pieces.append(p.grad.detach().cpu().numpy().ravel().copy())
-        if pieces:
-            self.dis.grad_history.append(np.concatenate(pieces))
-
     # -- Choi mode (max entangled state) ------------------
     def _train_step_choi(self, epoch_iter: int, fidelities: list, losses: list):
         """One training iteration in Choi mode."""
@@ -446,7 +410,6 @@ class Training:
             dis_loss = self.dis.compute_loss(self.final_target_state, final_gen_detached)
             dis_loss.backward()
             frozen = self._freeze_ancilla_row()
-            self._record_dis_grad(epoch_iter)
             self.dis.optimizer.step()
             self._restore_ancilla_row(frozen)
             self.dis.cap_norm()
@@ -488,7 +451,6 @@ class Training:
             dis_loss = self.dis.compute_loss_batch(batch_targets, det_gen_states)
             dis_loss.backward()
             frozen = self._freeze_ancilla_row()
-            self._record_dis_grad(epoch_iter)
             self.dis.optimizer.step()
             self._restore_ancilla_row(frozen)
             self.dis.cap_norm()

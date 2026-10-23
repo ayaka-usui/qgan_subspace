@@ -279,7 +279,6 @@ class Config:
         #   - dis_new_ancilla_row: Discriminator term on the ancilla, when it is added to a loaded run:
         #       + "random": Random, like the other qubits.
         #       + "identity": The identity (psi -> psi ⊗ I), so the cost right after adding it is the same.
-        #       + "random_unit": The random one with norm 1 (so the norm of psi and phi does not change).
         #
         #   - dis_ancilla_row_trainable: Whether that ancilla term is trained (if not, it keeps its initial value).
         #
@@ -292,7 +291,7 @@ class Config:
         self.dis_type: Literal["local", "global"] = "local"
         self.dis_global_max_weight: Optional[int] = None
         self.dis_module_cap: Optional[float] = None
-        self.dis_new_ancilla_row: Literal["random", "identity", "random_unit"] = "random"
+        self.dis_new_ancilla_row: Literal["random", "identity"] = "random"
         self.dis_ancilla_row_trainable: bool = True
         self.dis_eval: Literal["spectral", "exponentiation"] = "spectral"
 
@@ -340,7 +339,7 @@ class Config:
         #  - lamb, s, cst1, cst2, cst3: Constants for Wasserstein cost and gradient.
         #
         #############################################################################################
-        self.lamb = float(10)  # (the discriminator reads it when imported)
+        self.lamb = float(10)  # (change it with CFG.update, so that s and cst1-3 follow)
         self._derive()
 
         #############################################################################################

@@ -131,17 +131,6 @@ def _as_state(g: torch.Tensor) -> torch.Tensor:
 # after this module is imported applies to every term)
 
 
-def fixed_norm_rows(coeffs: torch.Tensor, kappa: float) -> torch.Tensor:
-    r"""Rescale rows c_i = (c_0, \vec c) so that the product operator \otimes_i (c_0 I + \vec c\cdot\vec\sigma) has
-    operator norm kappa: ||c_0 I + \vec c\cdot\vec\sigma|| = |c_0| + |\vec c|, each row is normalised to 1 and then
-    multiplied by kappa^(1/n_rows). The directions (the random part) are unchanged.
-    """
-    if not kappa > 0:
-        raise ValueError(f"kappa must be > 0, got {kappa}")
-    row_norm = coeffs[:, 0].abs() + coeffs[:, 1:].norm(dim=1)
-    return coeffs / row_norm.clamp(min=1e-30)[:, None] * kappa ** (1.0 / coeffs.shape[0])
-
-
 def capped_rows(coeffs: torch.Tensor, cap: float, n_scaled: Optional[int] = None) -> torch.Tensor:
     r"""Rows (n, 4) of a local critic scaled down so that its operator norm prod_i (|c_i0| + |\vec c_i|) is at most
     cap (CFG.dis_module_cap): if it is larger, the first n_scaled rows (default all) are all multiplied by the same
@@ -229,8 +218,6 @@ class Discriminator(nn.Module):
         self.ancilla_mode: str = CFG.ancilla_mode
         self.target_size: int = CFG.system_size
         self.target_hamiltonian: str = CFG.target_hamiltonian
-        # -- Gradient history (trajectory variance) --
-        self.grad_history: list[np.ndarray] = []
         # Detached A, B, psi, phi (or eigenbases) of the current parameters, reused until they change
         self._matrices_cache = None
         self._spectrum_cache = None
@@ -461,11 +448,7 @@ class Discriminator(nn.Module):
                     # the construction draw (before any dis_module_cap, which applies to the whole critic below)
                     self.alpha[min_size:] = self._new_ancilla_rows[0]
                     self.beta[min_size:] = self._new_ancilla_rows[1]
-                elif self.size > min_size and CFG.dis_new_ancilla_row == "random_unit":
-                    # the construction draw at unit operator norm: ||psi (x) h|| = ||psi||, ||phi (x) h'|| = ||phi||
-                    self.alpha[min_size:] = fixed_norm_rows(self._new_ancilla_rows[0][None], 1.0)
-                    self.beta[min_size:] = fixed_norm_rows(self._new_ancilla_rows[1][None], 1.0)
-                elif CFG.dis_new_ancilla_row not in ("random", "identity", "random_unit"):
+                elif CFG.dis_new_ancilla_row not in ("random", "identity"):
                     raise ValueError(f"Unknown dis_new_ancilla_row: {CFG.dis_new_ancilla_row}")
             self.cap_norm()
             print_and_log(
@@ -492,17 +475,12 @@ class Discriminator(nn.Module):
         if abs(n_saved - self.size) > 1:
             print_and_log("ERROR: incompatible discriminator (size mismatch).\n", CFG.log_path)
             return False
-        if CFG.dis_new_ancilla_row not in ("random", "identity", "random_unit"):
+        if CFG.dis_new_ancilla_row not in ("random", "identity"):
             raise ValueError(f"Unknown dis_new_ancilla_row: {CFG.dis_new_ancilla_row}")
         sd = saved["state_dict"]
         dt = self.alpha.dtype
         eye_row = torch.tensor([1.0, 0.0, 0.0, 0.0], dtype=dt)
-        if CFG.dis_new_ancilla_row == "identity":
-            new_rows = (eye_row, eye_row)
-        elif CFG.dis_new_ancilla_row == "random_unit":  # the random row at unit operator norm
-            new_rows = tuple(fixed_norm_rows(r[None], 1.0)[0] for r in self._new_ancilla_rows)
-        else:
-            new_rows = self._new_ancilla_rows
+        new_rows = (eye_row, eye_row) if CFG.dis_new_ancilla_row == "identity" else self._new_ancilla_rows
 
         saved_strings = None
         if saved_type == "local":

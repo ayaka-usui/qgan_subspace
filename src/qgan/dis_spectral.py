@@ -400,11 +400,3 @@ def spectral_cost(g: torch.Tensor, t: torch.Tensor, spec: DisSpectrum) -> torch.
     if g.dim() == 2 and g.shape[1] == 1:
         g = g.reshape(-1)
     return spectral_wasserstein(g.unsqueeze(0), t.reshape(-1), spec)[0]
-
-
-def critic_norms(alpha: np.ndarray, beta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Spectral norms ||psi||, ||phi|| = prod_i (|c_i0| + |c_i|) for (..., n, 4) rows."""
-    def nrm(c):
-        c = np.asarray(c, dtype=np.float64)
-        return np.prod(np.abs(c[..., 0]) + np.linalg.norm(c[..., 1:], axis=-1), axis=-1)
-    return nrm(alpha), nrm(beta)
