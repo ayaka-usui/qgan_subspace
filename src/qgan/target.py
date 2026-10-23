@@ -25,9 +25,11 @@ or we apply it to random Haar states (uniform distribution - Haar).
 """
 
 import sys
+import warnings
 
 import numpy as np
 import pennylane as qml
+import torch
 
 from config import CFG
 
@@ -42,7 +44,7 @@ _PAULI_MAP = {
 
 
 def _pauli_word(pauli_string: str, qubits: list[int]) -> qml.operation.Operator:
-    """Build a PennyLane tensor-product Pauli operator from a string.
+    r"""Build a PennyLane tensor-product Pauli operator from a string.
 
     This is the PennyLane replacement for all the original term_* functions.
     Instead of manually building Kronecker products of 2×2 matrices,
@@ -162,7 +164,7 @@ def _hamiltonian_to_unitary(H: qml.Hamiltonian, size: int) -> np.ndarray:
 
 # -- PREDEFINED HAMILTONIANS ------------------------
 def _cluster_hamiltonian(size: int) -> qml.Hamiltonian:
-    """Cluster Hamiltonian:  H = \sum_i X_iZ_{i+1}X_{i+2} + \sum_i Z_i"""
+    r"""Cluster Hamiltonian:  H = \sum_i X_iZ_{i+1}X_{i+2} + \sum_i Z_i"""
     coeffs, ops = [], []
     # XZX terms: 3-body stabilizer-like interactions
     for i in range(size - 2):
@@ -176,7 +178,7 @@ def _cluster_hamiltonian(size: int) -> qml.Hamiltonian:
 
 
 def _ising_hamiltonian(size: int) -> qml.Hamiltonian:
-    """Transverse-field Ising:  H = -\sum_i Z_iZ_{i+1} - \sum_i X_i"""
+    r"""Transverse-field Ising:  H = -\sum_i Z_iZ_{i+1} - \sum_i X_i"""
     coeffs, ops = [], []
     for i in range(size - 1):
         # ZZ coupling between neighbours
@@ -283,12 +285,20 @@ def get_target_unitary(target_type: str, size: int) -> np.ndarray:
             f"Unknown target type: {target_type}. Expected 'cluster_h', 'rotated_surface_h', 'ising_h', or 'custom_h'."
         )
 
+    # An empty Hamiltonian (e.g. a "ZZZ" term on 2 qubits: no 3 neighbouring qubits) is H = 0, so U = I exactly (as the
+    # numpy code gives); PennyLane cannot exponentiate an empty sum
+    if len(H.terms()[0]) == 0:
+        warnings.warn(f"The target Hamiltonian {target_type!r} has no term on {size} qubits"
+                      + (f" (terms {CFG.custom_hamiltonian_terms})" if target_type == "custom_h" else "")
+                      + ": H = 0, so the target is the identity, U = I.", stacklevel=2)
+        return np.eye(2**size, dtype=complex)
+
     # Convert Hamiltonian -> unitary: U = e^{-iH}
     return _hamiltonian_to_unitary(H, size)
 
 
 def get_target_operator() -> np.ndarray:
-    """Build the full target operator for the current training mode.
+    r"""Build the full target operator for the current training mode.
 
     Choi mode:  I_choi \otimes U_target [\otimes I_ancilla]
 
@@ -314,3 +324,19 @@ def get_target_operator() -> np.ndarray:
         target_op = np.kron(target_op, np.eye(2))
 
     return target_op
+
+
+def get_target_choi_state(dtype) -> torch.Tensor:
+    """Target state of Choi mode, (I_choi ⊗ U_target [⊗ I_ancilla]) |Φ+> [|0>], as a torch vector of `dtype`,
+    without building that 2^(2s) x 2^(2s) operator (it does not fit in memory from s = 8 on).
+
+    With |Φ+> = sum_i |i>|i> / sqrt(D) (Choi register first), the entry (i, j) of (I ⊗ U)|Φ+> is U[j, i] / sqrt(D):
+    U^T as a vector times the entries of |Φ+>, the same numbers as get_target_operator() @ |Φ+> in `dtype` (each entry
+    is the only non-zero product of that matrix-vector product).
+    """
+    U = np.asarray(get_target_unitary(CFG.target_hamiltonian, CFG.system_size))
+    D = U.shape[0]
+    t = (torch.tensor(U, dtype=dtype).T * torch.tensor(1.0 / np.sqrt(D), dtype=dtype)).reshape(-1)
+    if CFG.extra_ancilla and CFG.ancilla_mode == "pass":  # ancilla (last qubit) in |0>
+        t = torch.stack([t, torch.zeros_like(t)], dim=1).reshape(-1)
+    return t

@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Configuration for the QGAN experiment
-No big changed from original"""
+"""the configuration for hamiltonian simulation task"""
 
 from datetime import datetime
 from typing import Any, Literal, Optional
@@ -20,36 +19,54 @@ from typing import Any, Literal, Optional
 import numpy as np
 
 
+################################################################
+# CONFIGURATION CLASS
+################################################################
 class Config:
-    """Central configuration for all QGAN experiment parameters
-
-    Single global instance (CFG) imported by all modules
-    """
-
     def __init__(self):
-        # -- Run mode ----------------------------
-        # Single run or multiple experiments with optional shared initial plateaus.
+        """Configuration for the QGAN experiment, which sets up all parameters required for training it."""
 
+        ############################################################################################
+        # ---------------------
+        # RUNS CONFIGURATION
+        # ---------------------
+        #       Whether to run a single or multiple experiments, and whether to just run different experiments from
+        #       the start, or starting from a common configuration find a certain number of plateaus and then
+        #       apply changes continuing the run from them (and not adding the changes for controls comparisons).
+        #       Each individual experiment lasting the specified number of epochs and iterations in CFG.
+        #
+        #   - run_multiple_experiments: Whether to run multiple experiments.
+        #
+        #   - common_initial_plateaus: Whether to start from common initial plateaus + change, or all from scratch.
+        #
+        #     If True:
+        #       + N_initial_plateaus: Number of initial plateaus to find, with default CFG (default: 5).
+        #       + N_reps_each_init_plateau: Num of reps for each initial experiment afterwards, with changes (default: 20).
+        #
+        #     If False:
+        #       + N_reps_if_from_scratch: Number of repetitions for each new configuration (default: 100).
+        #
+        #   - reps_new_config: The configuration changes to run. If starting from common initial plateaus,
+        #         then this represent the changes after the initial plateaus (+ control with no changes).
+        #         If not starting from common initial plateaus, then this represents the full set of experiments.
+        #
+        #   - parallel_runs: Whether the runs of each phase (initial plateaus, controls, each changed configuration, or
+        #         the repetitions from scratch) are trained together, in one batched computation (False: one after
+        #         the other). As many as fit in half of the free memory are trained together (all of them, at small
+        #         sizes), and a run that stops is replaced by the next one. Each run gives the same results and files as
+        #         when trained alone (equal up to rounding errors), except with compute_entanglement: numpy's random
+        #         numbers (the negativities' random inputs, and with type_of_warm_start = "some" the re-drawn
+        #         parameters) are then drawn in another order. Only with use_choi = True and dis_eval = "spectral".
+        #
+        #############################################################################################
         self.run_multiple_experiments: bool = True
         self.common_initial_plateaus: bool = True
-
-        # If common_initial_plateaus:
+        # If common_initial_plateaus == true:
         self.N_initial_plateaus: int = 5
         self.N_reps_each_init_plateau: int = 1
-
-        # If not common_initial_plateaus:
+        # If common_initial_plateaus == false:
         self.N_reps_if_from_scratch: int = 20
 
-        # -- Training mode ----------------------------
-        # use_choi: True = Choi representation, False = Haar random batching
-        self.use_choi: bool = True
-        self.batch_size: int = 8  # Only for Haar/Comp random
-        self.batch_mode: Literal["haar", "comp"] = "comp"
-
-        self.eval_batch_size = 20
-        self.eval_seed = 1234
-
-        # Configurations to compare (each dict overrides CFG attributes):
         self.reps_new_config: list[dict[str, Any]] = [
             {
                 "extra_ancilla": False,
@@ -81,152 +98,266 @@ class Config:
                 "ancilla_coupling_layers": "all",
                 "ancilla_training": True,
             },
+            # Add more configs here for comparison
         ]
+        self.parallel_runs: bool = False
 
-        # -- Loading and warm start ----------------------------
-        # Load a previous run by timestamp. Supports \pm 1 qubit (ancilla add/remove).
-        self.load_timestamp: Optional[str] = None  # -- "" <------------
+        #############################################################################################
+        # ---------------------
+        # LOADING CONFIGURATION
+        # ---------------------
+        #   - load_timestamp: Timestamp to load a previous run (ex. None, 2025-06-06__02-05-10").
+        #       + For individual runs, it will load the models from the specified timestamp.
+        #       + For multiple runs, it will move to the directory from the specified timestamp,
+        #         and append the new configurations (if common init, it will first check the CFG matches).
+        #     Loads gen (thetas) and dis (alphas/betas), and the momentum of their optimizers (see below).
+        #     Supports loading when adding or removing an ancilla (one qubit difference).
+        #     WARNING: Only load trusted pickle files! Untrusted files may be insecure.
+        #
+        #   - type_of_warm_start: Warm start type for loading models (only if load_timestamp != None).
+        #       + "none": No warm start.
+        #       + "all": Warm start all parameters, by a bit (strength).
+        #       + "some": Warm start some parameters (strength), to completely random.
+        #
+        #   - warm_start_strength: Strength of warm start for generator (only if loading).
+        #
+        #   - reset_optimizer_on_load: Whether the momentum of the optimizers restarts from zero when loading (True),
+        #       or is restored from the saved models (False). Adding or removing an ancilla always restarts it, so with
+        #       True the control runs restart it too (the same for both arms of a control-vs-ancilla comparison).
+        #       (Continuing a multiple run made with False needs False: the configuration check compares it.)
+        #
+        #############################################################################################
+        self.load_timestamp: Optional[str] = None  # "2025-07-10__18-57-21"
         self.type_of_warm_start: Literal["none", "all", "some"] = "none"
         self.warm_start_strength: Optional[float] = 0.1
+        self.reset_optimizer_on_load: bool = True
 
-        # -- Training ------------------------------------------
+        #############################################################################################
+        # ----------------------
+        # TRAINING CONFIGURATION
+        # ----------------------
+        #   - epochs: Number of training epochs (default: ~10)
+        #
+        #   - iterations_epoch: Number of iterations per epoch (default: ~100)
+        #
+        #   - save_fid_and_loss_every_x_iter: Saving fidelity and loss every x iterations (default: ~10)
+        #
+        #   - log_every_x_iter: Logging every x iterations (default: ~10)
+        #           (needs to be a multiple of save_fid_and_loss_every_x_iter)
+        #
+        #   - max_fidelity: Stopping criterion for fidelity (default: ~0.99)
+        #
+        #   - compute_entanglement: Whether to compute the ancilla entanglement entropy at each iteration
+        #       and display it in the live iteration plots (only meaningful when `extra_ancilla` is enabled),
+        #       and all the qubit pairwise negativities (meaningful both for `extra_ancilla` enabled and disabled).
+        #
+        #   - negativity_n_states: Number of random product input states the negativities are averaged over.
+        #
+        #   - steps_gen/dis: Discriminator (first) and Generator (second) update steps in each iter (1~5).
+        #
+        #   - use_choi: Whether to train on the Choi state of the generator (True), or on batches of input states:
+        #       + batch_mode: "haar" (batch_size random states each iteration), or "comp" (batch_size states each
+        #         iteration from the basis states |j> and their pairwise superpositions, all d(d+1)/2 if larger).
+        #       + batch_size: Number of input states per iteration.
+        #       + eval_batch_size, eval_seed: Fixed set of random states the fidelity is evaluated on.
+        #
+        #   - precision: "float32" or "float64" (needed when exp(phi/lamb) overflows, for discriminators with
+        #       large norms, e.g. random ones at >= 4 system qubits).
+        #
+        #############################################################################################
         self.epochs: int = 10
         self.iterations_epoch: int = 300
         self.save_fid_and_loss_every_x_iter: int = 20
-        self.log_every_x_iter: int = 20  # Must be a multiple of save_fid_and_loss_every_x_iter
-        self.max_fidelity: float = 0.99  # Stop button
-        # In GANs, we can choose that the Discriminador learn faster than the Generator, or vice versa.
-        self.steps_dis: int = 1
-        self.steps_gen: int = 1
-
-        # -- Entanglement diagnostics (ported from upstream `entanglement_entropy` + `negativity`) --
-        #   compute_entanglement: every `save_fid_and_loss_every_x_iter` iterations compute
-        #     - the von Neumann entropy (log2) of the ancilla in the Choi output state (only if extra_ancilla),
-        #     - the mean pairwise negativity of U_gen acting on `negativity_n_states` random product
-        #       states (ancilla fixed to |0>), for every pair of generator qubits ("1-2", ..., "1-a", ...).
+        self.log_every_x_iter: int = 20  # This needs to be a multiple of save_fid_and_loss_every_x_iter
+        self.max_fidelity: float = 0.99
         self.compute_entanglement: bool = False
         self.negativity_n_states: int = 50
+        self.steps_dis: int = 1
+        self.steps_gen: int = 1
+        self.use_choi: bool = True
+        self.batch_mode: Literal["haar", "comp"] = "comp"
+        self.batch_size: int = 8
+        self.eval_batch_size = 20
+        self.eval_seed = 1234
+        self.precision: Literal["float32", "float64"] = "float32"
 
-        # -- Qubits and ancilla ----------------------------
+        #############################################################################################
+        # ---------------------
+        # QUBITS CONFIGURATION
+        # ---------------------
+        #   - system_size: Number of qubits to study (excluding choi or ancilla), (default: 2-4)
         #
-        # Ancilla topologies: (Fig. 4.3 TFM Guille)
-        #   disconnected : ancilla has 1q gates only, no 2q coupling
-        #   ansatz       : ancilla couples to one system qubit (connect_to)
-        #   bridge       : ancilla couples to qubit 0 AND connect_to
-        #   total        : ancilla couples to ALL system qubits
-        #   fake         : extra 2q gate between qubit 0 and connect_to (no actual ancilla coupling). With
-        #                  do_ancilla_1q_gates=False and ancilla_mode="project" the idle extra qubit stays in |0>
-        #                  and is removed (p0 = 1): the system line closed into a ring.
+        #   - extra_ancilla: Whether to include an extra ancilla.
         #
-        # Ancilla modes (post-generator, pre-discriminator), see qgan/ancilla.py. Write the generator output
-        # as |g> = |g_0>|0>_a + |g_1>|1>_a (Choi: K_j0 = <j|U_gen|0>_a); the target is always t ⊗ |0>_a:
-        #   pass    : the critic sees the full state |g> (one discriminator row on the ancilla)
-        #   project : the critic sees |g_0> (post-selection on ancilla |0>; no ancilla row);
-        #             ancilla_project_norm = "re-norm" -> |g_0>/sqrt(p0) (post-selected state, p0 = <g_0|g_0>)
-        #                                    "pass"    -> |g_0> unnormalised (the cost then depends on p0)
-        #   trace   : the critic sees rho = Tr_a |g><g| = |g_0><g_0| + |g_1><g_1| (no ancilla row; the cost is
-        #             linear in rho, so it is evaluated exactly on the two branches; no sampling)
+        #   - ancilla_mode: What the discriminator sees, writing the output as |g> = |g_0>|0>_a + |g_1>|1>_a:
+        #       + "pass": The full state |g>, compared with the target ⊗ |0>_a.
+        #       + "project": |g_0>, the ancilla projected on |0>, normalised ("re-norm") or not ("pass"),
+        #         as set in ancilla_project_norm.
+        #       + "trace": The ancilla traced out, rho = |g_0><g_0| + |g_1><g_1|.
+        #
+        #   - ancilla_topology: Topology for the ancilla connections:
+        #           |-----------------|-------------------|---------------------|----------------------|
+        #           |  "disconnected" |      "ansatz"     |       "bridge"      |        "total"       |
+        #     |-----|-----------------|-------------------|---------------------|----------------------|
+        #     | Q0: |  ───|     |───  |  ───|     |─────  |  ───|     |──■────  |  ───|     |──■────── |
+        #     | Q1: |  ───|  G  |───  |  ───|  G  |─────  |  ───|  G  |──│────  |  ───|  G  |──│─■──── |
+        #     | Q2: |  ───|     |───  |  ───|     |──x──  |  ───|     |──│─x──  |  ───|     |──│─│─■── |
+        #     |     |                 |              │    |              │ │    |              │ │ │   |
+        #     | A:  |  ────U...U────  |  ────U...U───■──  |  ────U...U───■─■──  |  ────U...U───■─■─■── |
+        #     |     |                 |                   |                     |                      |
+        #     |     |       or        |         or        |           or        |          or          |
+        #     |     |                 |                   |                     |                      |
+        #     |  M  |                 |     Q0──Q1──Q2    |      Q0──Q1──Q2     |      Q0──Q1──Q2      |
+        #     |  A  |  Q0──Q1──Q2  A  |           "x"|    |      │     "x"│     |      │   │   │       |
+        #     |  P  |                 |     A────────     |      A────────      |      A────────       |
+        #     |-----|-----------------|-------------------|---------------------|----------------------|
+        #
+        #       + "fake": The ancilla is not connected, and Q0 is connected to the "x" qubit instead (the ring).
+        #
+        #   - ancilla_connect_to: If ancilla_topology is "ansatz" or "bridge" connect to this qubit index
+        #       (starting at 0). If None, then the ancilla is connected to the last qubit.
+        #       (In the diagrams above, you would basically choose where that "x" connection goes in those)
+        #
+        #   - do_ancilla_1q_gates: Whether to include 1-qubit gates for the ancilla qubit.
+        #       (The `U...U` gate in the previous diagrams).
+        #
+        #   - start_ancilla_gates_randomly: Whether to start the ancilla gates with random angles (if not, at 0).
+        #       (The ancilla connections use the 2-qubit gates of the ansatz.)
+        #
+        #   - ancilla_coupling_layers: Layers with ancilla gates ("all", or a list of layer indices).
+        #
+        #   - ancilla_training: Whether the ancilla gates are trained (if not, they keep their initial angles).
+        #
+        ###############################################################################################
         self.system_size: int = 3
         self.extra_ancilla: bool = False  # We begin with no extra qubits, but we add once we reach the Plateau
-        self.gen_layers: int = 1
-        # Ancilla mode define what happens to the ancilla before Discriminator (ancilla.py)
         self.ancilla_mode: Optional[Literal["pass", "project", "trace"]] = "pass"
         self.ancilla_project_norm: Optional[Literal["re-norm", "pass"]] = "re-norm"
         self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "total"
-        self.ancilla_connect_to: Optional[int] = None
-        self.do_ancilla_1q_gates: bool = True
-        # 2q gate types of the ancilla couplings: None -> the 2q terms of the ansatz (default), or a sublist
-        # such as ["ZZ"]. With ["ZZ"], do_ancilla_1q_gates=False and the ancilla in |0>, the ancilla never
-        # leaves |0> (ZZ is diagonal on it): the circuit is the system ansatz + RZ on the coupled qubits.
-        self.ancilla_coupling_terms: Optional[list[str]] = None
-        self.start_ancilla_gates_randomly: bool = True
-        # Ancilla angles at creation when start_ancilla_gates_randomly is False: 0 (None, default), or
-        # N(0, scale^2) ("nudged" insertion).
-        self.ancilla_init_angle_scale: Optional[float] = None
-        # If all layer have 1q and 2q coupling gates or not
+        self.ancilla_connect_to: Optional[int] = None  # None means connected to last one, otherwise to the specified.
+        self.do_ancilla_1q_gates: bool = True  # Whether to include 1-qubit gates for ancilla qubit.
+        self.start_ancilla_gates_randomly: bool = True  # Whether to start ancilla gates with random angles.
         self.ancilla_coupling_layers: Literal["all"] | list[int] = "all"
-        # If False, ancilla params are randomly initialised but FROZEN,
-        # autograd does not propagate the losvs
         self.ancilla_training: bool = True
 
-        # -- Generator ansatz ----------------------------
+        #############################################################################################
+        # -----------------------
+        # GENERATOR CONFIGURATION
+        # -----------------------
+        #   - gen_layers: Number of layers in the generator ansatz (default: ~4)
         #
-        # Per layer, outer loop = gate type, inner loop = qubits.
+        #   - gen_ansatz: Ansatz type for generator:
+        #       + "ZZ_YY_XX_Z": First 1 body Z terms, then, 2 body Z, 2 body Y and 2 body X terms.
+        #       + "ZZ_Z_X": First 1 body X and 1 body Z terms, and then 2 body Z.
+        #       + "custom": Custom ansatz, with two qubit and single qubit interactions in the given order.
         #
-        # Predefined:
-        #   ZZ_YY_XX_Z : Z(1q) -> XX(2q) + YY(2q) + ZZ(2q)
-        #   ZZ_Z_X     : X(1q) + Z(1q) -> ZZ(2q)
+        #   - custom_ansatz_terms: Custom Ansatz terms (only apply if gen_ansatz is "custom").
+        #       + "X", "Y", "Z", "XX", "ZZ", "YY": Available custom ansatz terms.
         #
-        # Custom: specify gate order in custom_ansatz_terms.
-        #   Available: "X", "Y", "Z", "XX", "YY", "ZZ"
+        #   (In each layer, the outer loop is the type of gate, and the inner loop is the qubits they apply to).
+        #   (Every gate is a rotation exp(-i θ/2 P): RX, RY, RZ, and IsingXX, IsingYY, IsingZZ).
+        #
+        #############################################################################################
+        self.gen_layers: int = 1  # 2, 3, 5, 10, 20 ...
         self.gen_ansatz: Literal["ZZ_YY_XX_Z", "ZZ_Z_X", "custom"] = "ZZ_Z_X"
-        self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "XX", "YY", "Z"]
+        self.custom_ansatz_terms: Optional[list[str]] = ["ZZ", "XX", "YY", "Z"]  # "X", "Y", "Z", "XX", "ZZ", "YY"
 
-        # Gate convention of the 2-qubit rotations and order of the ancilla couplings:
-        #   "uniform"  : every rotation is exp(-i θ/2 P) (RX, RY, RZ, IsingXX, IsingYY, IsingZZ), so all
-        #                generators have the same norm and per-parameter gradients are comparable across
-        #                gate types; ancilla couplings ordered gate-type-outer, connection-inner (like the
-        #                system 2q gates: commuting terms grouped as in a Trotter step).          [default]
-        #   "upstream" : identical circuit to the numpy code (ayaka-usui/qgan_subspace):
-        #                XX(θ)=exp(-iθ XX), YY(θ)=exp(-iθ YY), ZZ(θ)=exp(+iθ/2 ZZ), gate-type-outer order.
-        #   "fork"     : the PennyLane fork before the merge: exp(-i θ/2 P), connection-outer order.
-        #   The convention is stored with the generator and checked when loading.
-        self.gate_convention: Literal["uniform", "upstream", "fork"] = "uniform"
-
-        # -- Loading / continuing from a plateau --
-        #   reset_optimizer_on_load: False -> exact-match loads restore the saved SGD momentum (fork);
-        #       True -> momentum restarts from zero (upstream). Partial loads (ancilla added/removed)
-        #       always restart it, so False makes control and ancilla-added continuations asymmetric.
-        #   dis_new_ancilla_row: discriminator factor on the qubit added when an ancilla is inserted:
-        #       "random"   -> alpha, beta ~ U[-1,1] like any other row (current behaviour);
-        #       "identity" -> alpha = beta = (1,0,0,0): the cost right after insertion (with zero ancilla
-        #                     angles) equals the plateau cost, so changes come from the ancilla gates only.
-        #   dis_gradient: "exact" -> autograd gradient of W w.r.t. alpha, beta (fork);
-        #       "upstream" -> the numpy code's formula, which uses d e^{X} ~ e^{X} dX (ignores [X, dX] != 0).
-        #   dis_ancilla_row_trainable (pass mode, ancilla present): False -> the critic's factor on the ancilla qubit
-        #       keeps its value (its gradient is zeroed and the row restored after every step), e.g. the identity row of
-        #       dis_new_ancilla_row = "identity" stays the identity ("frozen identity"); True -> trained like any other
-        #       row (current behaviour).
-        self.reset_optimizer_on_load: bool = False
-        self.dis_new_ancilla_row: Literal["random", "identity"] = "random"
-        self.dis_ancilla_row_trainable: bool = True
-        self.dis_gradient: Literal["exact", "upstream"] = "exact"
-        # -- Critic initialisation scale --
-        #   None  -> alpha, beta ~ U[-1,1]^4 per row (current); the operator norms ||psi||, ||phi|| =
-        #            prod_i (|c_i0| + |c_i|) then grow with the number of rows.
-        #   kappa -> same random directions, every row rescaled so that ||psi|| = ||phi|| = kappa exactly.
-        self.dis_init_scale: Optional[float] = None
-
-        # -- Numerical precision: "float32" (complex64 states, default) or "float64" (complex128).
-        #    float64 avoids the float32 overflow of exp(phi/lambda) for discriminators with large norms
-        #    (e.g. random discriminators at >= 4 system qubits).
-        self.precision: Literal["float32", "float64"] = "float32"
-
-        # -- Target Hamiltonian ----------------------------
+        #############################################################################################
+        # ---------------------------
+        # DISCRIMINATOR CONFIGURATION
+        # ---------------------------
+        #   - dis_type: Type of the discriminator observables psi and phi:
+        #       + "local": Tensor products of 1 qubit observables, psi = ⊗_i (a_i0 I + a_i1 X + a_i2 Y + a_i3 Z).
+        #       + "global": Sums over all the Pauli strings, psi = sum_P a_P P (any observable).
         #
-        # Predefined: cluster_h, ising_h, rotated_surface_h (squared qubits only)
-        # Custom: specify terms and strengths.
-        #   Available: I, X, Y, Z, XX, XZ, ZZ, ZZZ, ZZZZ, XZX, XXXX
+        #   - dis_global_max_weight: Only for "global", keep only the Pauli strings acting on at most this number of
+        #       qubits (None: all of them).
+        #
+        #   - dis_module_cap: Maximum norm of psi and phi (None: no maximum). They are scaled down to it whenever
+        #       they exceed it (when created or loaded, and after every update).
+        #
+        #   - dis_new_ancilla_row: Discriminator term on the ancilla, when it is added to a loaded run:
+        #       + "random": Random, like the other qubits.
+        #       + "identity": The identity (psi -> psi ⊗ I), so the cost right after adding it is the same.
+        #       + "random_unit": The random one with norm 1 (so the norm of psi and phi does not change).
+        #
+        #   - dis_ancilla_row_trainable: Whether that ancilla term is trained (if not, it keeps its initial value).
+        #
+        #   - dis_eval: How the terms exp(-phi/lamb) and exp(psi/lamb) of the cost are computed (same results):
+        #       + "spectral": In the eigenbasis of psi and phi, known from their 1 qubit factors, so no 2^n x 2^n
+        #         matrix is built (much faster, and the only option for large sizes). Only for "local".
+        #       + "exponentiation": Exponentiating the 2^n x 2^n matrices (the original computation; any dis_type).
+        #
+        #############################################################################################
+        self.dis_type: Literal["local", "global"] = "local"
+        self.dis_global_max_weight: Optional[int] = None
+        self.dis_module_cap: Optional[float] = None
+        self.dis_new_ancilla_row: Literal["random", "identity", "random_unit"] = "random"
+        self.dis_ancilla_row_trainable: bool = True
+        self.dis_eval: Literal["spectral", "exponentiation"] = "spectral"
+
+        #############################################################################################
+        # ---------------------
+        # TARGET CONFIGURATION
+        # ---------------------
+        #   - time_to_evolve: Time t to evolve with the Hamiltonian exp^(-iHt), for the target state preparation (default: 1.0).
+        #
+        #   - target_hamiltonian: Target Hamiltonian type:
+        #       + "cluster_h": Cluster Hamiltonian (default).
+        #       + "rotated_surface_h": Rotated surface code (only for squared sizes: 4, 9, 16...).
+        #       + "ising_h": Ising Hamiltonian.
+        #       + "custom_h": Custom Hamiltonian terms.
+        #
+        #   - custom_hamiltonian_terms: Custom Hamiltonian terms (only apply if target_hamiltonian is "custom_h").
+        #       + "I", "X", "Y", "Z", "XX", "XZ", "ZZ", "ZZZ", "ZZZZ", "XZX", "XXXX": Available custom Hamiltonian terms.
+        #
+        #   - custom_hamiltonian_strengths: Strengths for the custom H terms (only apply if target_hamiltonian is "custom_h").
+        #
+        #############################################################################################
         self.time_to_evolve: float = 1.0  # Time to evolve with the Hamiltonian, for the target state preparation.
         self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "ising_h", "custom_h"] = "custom_h"
-        self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ", "XXX"]
-        self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0, 0.4]
-        # -- Optimiser --------------------------------------
+        self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ", "XXX"]  # "I", "X", "Y", "Z", "XX", "XZ", "ZZZ", ...
+        self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0, 0.4]  # Strengths for the above terms.
+
+        #############################################################################################
+        # -----------------------------------
+        # MOMENTUM OPTIMIZATION CONFIGURATION
+        # -----------------------------------
+        #   - l_rate: Learning rate for optimizers (default: 0.01)
+        #   - momentum_coeff: Momentum coefficient for optimizers (default: 0.9)
+        #   - dis_l_rate: Learning rate for the discriminator (None: l_rate). A "global" one may need a smaller one,
+        #       since its steps on psi are 2^n times larger (l_rate / 8 was stable with 6 discriminator qubits).
+        #
+        #############################################################################################
         self.l_rate: float = 0.01
         self.momentum_coeff: float = 0.9
+        self.dis_l_rate: Optional[float] = None
 
-        # -- Wasserstein cost hyperparameters ----------------------------
-        # (lamb must be set before qgan.discriminator is imported: it reads it at import)
-        self.lamb = float(10)
+        #############################################################################################
+        # ------------------------------------
+        # HYPERPARAMETERS for Wasserstein Cost
+        # ------------------------------------
+        #  - lamb, s, cst1, cst2, cst3: Constants for Wasserstein cost and gradient.
+        #
+        #############################################################################################
+        self.lamb = float(10)  # (the discriminator reads it when imported)
         self._derive()
 
-        # -- Paths --------------------------------------------
+        #############################################################################################
+        # ----------------------------------
+        # SAVING AND LOGGING CONFIGURATION
+        # ---------------------------------
+        #   - several paths for saving outputs.
+        #
+        #############################################################################################
+        # Datetime for current run - initialized once
         self.run_timestamp: str = datetime.now().strftime("%Y-%m-%d__%H-%M-%S")
         self.base_data_path: str = f"./generated_data/{self.run_timestamp}"
+        # File path settings (dynamic based on run_timestamp and system_size)
         self.set_results_paths()
         self._validate()
 
-    # Fields computed from others (never set directly) and run-specific paths (not part of a preset)
+    # Fields computed from others (never set directly), and run-specific paths (not part of a configuration)
     _DERIVED = ("s", "cst1", "cst2", "cst3")
     _PATHS = (
         "run_timestamp",
@@ -241,7 +372,7 @@ class Config:
     )
 
     def _derive(self) -> None:
-        """Constants of the regulariser from lamb (e^{-C/2λ} = (1-u) I + u SWAP)."""
+        """Constants of the Wasserstein cost from lamb."""
         self.s = np.exp(-1 / (2 * self.lamb)) - 1
         self.cst1 = (self.s / 2 + 1) ** 2
         self.cst2 = (self.s / 2) * (self.s / 2 + 1)
@@ -252,10 +383,7 @@ class Config:
         return [k for k in vars(self) if not k.startswith("_") and k not in self._DERIVED]
 
     def update(self, **kw) -> None:
-        """Set fields by name (for scripts that copy their settings into CFG).
-
-        Unknown names raise (a typo never passes silently); derived constants and paths are recomputed.
-        """
+        """Set fields by name (unknown names raise); derived constants and paths are recomputed."""
         unknown = sorted(k for k in kw if k not in self.fields())
         if unknown:
             raise KeyError(f"Unknown CFG field(s): {unknown}")
@@ -267,16 +395,31 @@ class Config:
         self._validate()
 
     def as_dict(self) -> dict:
-        """Settable fields except the run-specific paths: a preset that reproduces this configuration."""
+        """Settable fields except the run-specific paths (a configuration that reproduces this one)."""
         return {k: getattr(self, k) for k in self.fields() if k not in self._PATHS}
 
     def _validate(self) -> None:
-        """Sanity check for every iter that we plot or save"""
         if self.log_every_x_iter % self.save_fid_and_loss_every_x_iter != 0:
             raise ValueError("log_every_x_iter must be a multiple of save_fid_and_loss_every_x_iter.")
+        if self.dis_type not in ("local", "global"):
+            raise ValueError(f"dis_type must be 'local' or 'global', got {self.dis_type!r}.")
+        if self.dis_global_max_weight is not None and self.dis_type != "global":
+            raise ValueError("dis_global_max_weight only applies to dis_type='global' (set it to None).")
+        if self.dis_module_cap is not None and not self.dis_module_cap > 0:
+            raise ValueError(f"dis_module_cap must be None or > 0, got {self.dis_module_cap!r}.")
+        if self.dis_eval not in ("spectral", "exponentiation"):
+            raise ValueError(f"dis_eval must be 'spectral' or 'exponentiation', got {self.dis_eval!r}.")
+        if self.dis_eval == "spectral" and self.dis_type != "local":
+            raise ValueError("dis_eval='spectral' needs dis_type='local' (set dis_eval='exponentiation' for 'global').")
+        if not isinstance(self.parallel_runs, (bool, np.bool_)):
+            raise ValueError(f"parallel_runs must be True or False, got {self.parallel_runs!r}.")
+        if self.parallel_runs and not (self.use_choi and self.dis_eval == "spectral"):
+            raise ValueError("parallel_runs=True needs use_choi=True and dis_eval='spectral'.")
+        if self.dis_l_rate is not None and not self.dis_l_rate > 0:
+            raise ValueError(f"dis_l_rate must be None or > 0, got {self.dis_l_rate!r}.")
 
     def set_results_paths(self) -> None:
-        """Update all output paths based on current base_data_path"""
+        """Set the paths for saving results based on the base data path."""
         base = self.base_data_path
         self.figure_path = f"{base}/figures"
         self.model_gen_path = f"{base}/saved_model/model-gen(hs).pkl"
@@ -291,7 +434,7 @@ class Config:
         return f"{self.base_data_path}/fidelities/log_negativity_{pair.replace('-', '')}.txt"
 
     def show_data(self) -> str:
-        """Readable summary of current configuration"""
+        """Return a string with the current configuration data."""
         sep = "─" * 50
         return (
             f"{'═' * 50}\n"
@@ -300,6 +443,10 @@ class Config:
             f"use_choi: {self.use_choi}\n"
             f"batch_size: {self.batch_size}\n"
             f"batch_mode:{self.batch_mode}\n"
+            # (how the results are computed, not what: above type_of_warm_start, so that earlier logs still match in
+            # training_init._check_for_previous_multiple_runs)
+            f"dis_eval: {self.dis_eval}\n"
+            f"parallel_runs: {self.parallel_runs}\n"
             f"{sep}\n"
             f"load_timestamp: {self.load_timestamp}\n"
             f"type_of_warm_start: {self.type_of_warm_start}\n"
@@ -312,22 +459,22 @@ class Config:
             f"ancilla_topology: {self.ancilla_topology}\n"
             f"ancilla_connect_to: {self.ancilla_connect_to}\n"
             f"do_ancilla_1q_gates: {self.do_ancilla_1q_gates}\n"
-            f"ancilla_coupling_terms: {self.ancilla_coupling_terms}\n"
             f"start_ancilla_gates_randomly: {self.start_ancilla_gates_randomly}\n"
-            f"ancilla_init_angle_scale: {self.ancilla_init_angle_scale}\n"
             f"ancilla_coupling_layers: {self.ancilla_coupling_layers}\n"
             f"ancilla_training: {self.ancilla_training}\n"
             f"{sep}\n"
             f"gen_layers: {self.gen_layers}\n"
             f"gen_ansatz: {self.gen_ansatz}\n"
             f"custom_ansatz_terms: {self.custom_ansatz_terms}\n"
-            f"gate_convention: {self.gate_convention}\n"
             f"reset_optimizer_on_load: {self.reset_optimizer_on_load}\n"
             f"dis_new_ancilla_row: {self.dis_new_ancilla_row}\n"
             f"dis_ancilla_row_trainable: {self.dis_ancilla_row_trainable}\n"
-            f"dis_gradient: {self.dis_gradient}\n"
-            f"dis_init_scale: {self.dis_init_scale}\n"
-            f"precision: {self.precision}\n"
+            # printed only when not the default, so that the logs of earlier runs still match in
+            # training_init._check_for_previous_multiple_runs
+            + (f"dis_type: {self.dis_type}\ndis_global_max_weight: {self.dis_global_max_weight}\n"
+               if self.dis_type != "local" else "")
+            + (f"dis_module_cap: {self.dis_module_cap}\n" if self.dis_module_cap is not None else "")
+            + f"precision: {self.precision}\n"
             f"{sep}\n"
             f"time_to_evolve: {self.time_to_evolve},\n"
             f"target_hamiltonian: {self.target_hamiltonian}\n"
@@ -345,10 +492,15 @@ class Config:
             f"negativity_n_states: {self.negativity_n_states}\n"
             f"{sep}\n"
             f"l_rate: {self.l_rate}\n"
-            f"momentum_coeff: {self.momentum_coeff}\n"
+            # printed only when set (no line = the shared l_rate)
+            + (f"dis_l_rate: {self.dis_l_rate}\n" if self.dis_l_rate is not None else "")
+            + f"momentum_coeff: {self.momentum_coeff}\n"
             f"lamb: {self.lamb}\n"
             f"{'═' * 50}\n"
         )
 
 
+####################################################################
+# Global instance of the Configuration class
+####################################################################
 CFG = Config()

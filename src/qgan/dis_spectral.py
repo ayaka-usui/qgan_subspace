@@ -15,8 +15,9 @@ V^† x is applied as n successive 2x2 mode products, O(n 2^n) per state, so no 
 matrix exponential is ever formed. Mixed generator states (ancilla_mode "trace": rho = sum_j |g_j><g_j| over the
 unnormalised branches g_j) are handled exactly by linearity: every term of W is linear in rho.  This is the same objective as cost_functions._calc_wasserstein
 with the dense (A, B, psi, phi) of Discriminator.get_dis_matrices_rep() (equal to machine
-precision); it makes evaluating many discriminators cheap, e.g. one per sample.  The training code
-(Discriminator) is unchanged.
+precision); it makes evaluating many discriminators cheap, e.g. one per sample.  The training uses it with
+CFG.dis_eval = "spectral" (Discriminator.compute_loss through spectral_critic_cost, Generator.compute_loss and the
+logged cost through Discriminator.detached_spectrum), and for the runs trained together (qgan.parallel_training).
 """
 
 from __future__ import annotations
@@ -364,6 +365,41 @@ def _critic_gradients_mixed(Gb: np.ndarray, T: np.ndarray, alpha: np.ndarray, be
         cross = sum((-contract(Mi, terms[1 + nb + j][1]) / lamb * gBt[j][:, None]).real for j in range(nb))
         dbeta[:, i] = (-lin - pref * (c1 * dA_gg * tBt[:, None] - 2 * c2 * cross + c3 * dA_tt * gBg[:, None])).real
     return dalpha, dbeta
+
+
+class _SpectralCriticCost(torch.autograd.Function):
+    """W of one critic (alpha, beta) at fixed states: the value from spectral_wasserstein, the gradient with respect to
+    alpha and beta from critic_gradients (exact, closed form); no gradient with respect to the states."""
+
+    @staticmethod
+    def forward(ctx, alpha: torch.Tensor, beta: torch.Tensor, G: torch.Tensor, T: torch.Tensor) -> torch.Tensor:
+        a, b = alpha.detach().cpu().numpy(), beta.detach().cpu().numpy()
+        W = spectral_wasserstein(G.detach(), T.detach(), DisSpectrum(a, b, alpha.dtype, G.dtype))
+        ctx.saved = (G.detach().cpu().numpy(), T.detach().cpu().numpy(), a, b, alpha.dtype)
+        return W
+
+    @staticmethod
+    def backward(ctx, grad_W: torch.Tensor):
+        G, T, a, b, dtype = ctx.saved
+        da, db = critic_gradients(G, T, a, b)  # (N, n, 4): dW_n / d(alpha, beta)
+        w = grad_W.detach().cpu().numpy().astype(np.float64)
+        return (torch.tensor(np.einsum("n,nij->ij", w, da), dtype=dtype),
+                torch.tensor(np.einsum("n,nij->ij", w, db), dtype=dtype), None, None)
+
+
+def spectral_critic_cost(alpha: torch.Tensor, beta: torch.Tensor, G: torch.Tensor, T: torch.Tensor) -> torch.Tensor:
+    """(N,) costs W(g_n, t_n) of the critic with rows alpha, beta (n, 4) (differentiable in alpha, beta), for fixed
+    states G (N, d) or branches (N, n_branches, d) and targets T (d,) or (N, d): Discriminator.compute_loss with
+    CFG.dis_eval = "spectral" (the same values and gradients as through the dense matrix exponentials)."""
+    return _SpectralCriticCost.apply(alpha, beta, G, T)
+
+
+def spectral_cost(g: torch.Tensor, t: torch.Tensor, spec: DisSpectrum) -> torch.Tensor:
+    """W of one generator state g (d,), (d, 1) or branches (n_branches, d), target t: _calc_wasserstein's argument
+    shapes, for spectral_wasserstein with one critic."""
+    if g.dim() == 2 and g.shape[1] == 1:
+        g = g.reshape(-1)
+    return spectral_wasserstein(g.unsqueeze(0), t.reshape(-1), spec)[0]
 
 
 def critic_norms(alpha: np.ndarray, beta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

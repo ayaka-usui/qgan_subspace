@@ -28,7 +28,6 @@ What the discriminator sees, by CFG.ancilla_mode (ancilla = last qubit, prepared
 """
 
 import numpy as np
-import torch
 import pennylane as qml
 import torch
 
@@ -179,7 +178,7 @@ def prepare_batch_targets(
     batch_inputs: list[torch.Tensor],
     target_op: torch.Tensor,
 ) -> list[torch.Tensor]:
-    """Give us the target state
+    r"""Give us the target state
     If ancilla_mode == "pass":
         target_i = (U_target \otimes I_2) |\psi_i> \otimes |0>
     Otherwise:
@@ -224,6 +223,24 @@ def gen_branches(total_output_state: torch.Tensor) -> torch.Tensor:
         return g0
     if CFG.ancilla_mode == "trace":
         return torch.stack([state[::2], state[1::2]])
+    raise ValueError(f"Unknown ancilla_mode: {CFG.ancilla_mode}")
+
+
+def gen_branches_batched(total_output_states: torch.Tensor) -> torch.Tensor:
+    """gen_branches row by row, for (R, D) generator outputs: (R, d) states, or (R, 2, d) branches for "trace"."""
+    state = total_output_states.reshape(total_output_states.shape[0], -1).to(cdtype())
+    if not CFG.extra_ancilla or CFG.ancilla_mode == "pass":
+        return state
+    if CFG.ancilla_mode == "project":
+        g0 = state[:, ::2]
+        if CFG.ancilla_project_norm == "re-norm":
+            p0 = (g0.conj() * g0).real.sum(1, keepdim=True)
+            g0 = g0 / torch.sqrt(torch.clamp(p0, min=1e-30))
+        elif CFG.ancilla_project_norm != "pass":
+            raise ValueError(f"Unknown ancilla_project_norm: {CFG.ancilla_project_norm}")
+        return g0
+    if CFG.ancilla_mode == "trace":
+        return torch.stack([state[:, ::2], state[:, 1::2]], dim=1)
     raise ValueError(f"Unknown ancilla_mode: {CFG.ancilla_mode}")
 
 

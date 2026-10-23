@@ -27,7 +27,6 @@ from typing import Optional
 import numpy as np
 import pennylane as qml
 import torch
-import torch.nn as nn
 
 from config import CFG
 from qgan.precision import cdtype, rdtype
@@ -37,10 +36,8 @@ from qgan.ancilla import (
     get_max_entangled_state_with_ancilla_if_needed,
 )
 from qgan.cost_functions import _calc_wasserstein
+from qgan.dis_spectral import spectral_cost
 from tools.data_managers import print_and_log
-
-# Wasserstein cost constants from config
-cst1, cst2, cst3, lamb = CFG.cst1, CFG.cst2, CFG.cst3, CFG.lamb
 
 # -- GATE TERM DEFINITIONS ------------------------------------------------
 _1Q_GATES = {
@@ -55,27 +52,11 @@ _2Q_GATES = {
     "ZZ": qml.IsingZZ,
 }
 
-# Angle factors that make the PennyLane Ising gates equal to the upstream (numpy) gate definitions:
-#   upstream XX(θ) = exp(-iθ X⊗X)    = IsingXX(2θ)
-#   upstream YY(θ) = exp(-iθ Y⊗Y)    = IsingYY(2θ)
-#   upstream ZZ(θ) = exp(+iθ/2 Z⊗Z)  = IsingZZ(-θ)
-# (1q gates already coincide: X/Y/Z(θ) = RX/RY/RZ(θ) = exp(-iθ/2 σ)).
-_UPSTREAM_2Q_ANGLE_FACTOR = {"XX": 2.0, "YY": 2.0, "ZZ": -1.0}
-
-
-_GATE_CONVENTIONS = ("uniform", "upstream", "fork")
-
-
-def _check_convention() -> str:
-    if CFG.gate_convention not in _GATE_CONVENTIONS:
-        raise ValueError(f"Unknown gate_convention {CFG.gate_convention!r}; expected one of {_GATE_CONVENTIONS}")
-    return CFG.gate_convention
 
 
 def _apply_2q(term: str, theta, wires) -> None:
-    """Apply a 2-qubit rotation with the angle convention selected by CFG.gate_convention."""
-    factor = _UPSTREAM_2Q_ANGLE_FACTOR[term] if _check_convention() == "upstream" else 1.0
-    _2Q_GATES[term](factor * theta, wires=wires)
+    """Apply a 2-qubit rotation exp(-i θ/2 P), P = XX, YY or ZZ (the same convention as the 1-qubit gates)."""
+    _2Q_GATES[term](theta, wires=wires)
 
 # Predefined ansatz
 _PREDEFINED_ANSATZ = {
@@ -108,13 +89,8 @@ def _layer_coupling(layer_idx: int) -> bool:
 
 
 def _ancilla_coupling_terms(terms: list[str]) -> list[str]:
-    """2q gate types of the ancilla couplings: CFG.ancilla_coupling_terms, or the ansatz's 2q terms if None."""
-    if CFG.ancilla_coupling_terms is None:
-        return [t for t in terms if t in _2Q_GATES]
-    bad = [t for t in CFG.ancilla_coupling_terms if t not in _2Q_GATES]
-    if bad:
-        raise ValueError(f"ancilla_coupling_terms {bad} are not 2-qubit gates; expected a subset of {sorted(_2Q_GATES)}")
-    return list(CFG.ancilla_coupling_terms)
+    """2q gate types of the ancilla couplings: the 2q terms of the ansatz, in its order."""
+    return [t for t in terms if t in _2Q_GATES]
 
 
 # -- DEVICE ----------------------------------------------------------------
@@ -184,7 +160,7 @@ class Ansatz:
         else:
             connect_wire = system_wires[-1]
 
-        # 2q gate types of the couplings (default: the 2q terms of the ansatz)
+        # 2q gate types of the couplings: the 2q terms of the ansatz
         terms_2q = _ancilla_coupling_terms(terms)
 
         # Connections of this topology (same order as the upstream numpy code)
@@ -198,12 +174,8 @@ class Ansatz:
         if topo == "fake" and n_sys > 2:
             pairs.append((system_wires[0], connect_wire))
 
-        # "uniform"/"upstream": gate type outer loop, connection inner loop (as the system 2q gates).
-        # "fork": the reverse. (Different circuits as soon as there are >=2 connections and >=2 gate types.)
-        if _check_convention() == "fork":
-            order = [(t, p) for p in pairs for t in terms_2q]
-        else:
-            order = [(t, p) for t in terms_2q for p in pairs]
+        # Gate type outer loop, connection inner loop (as the system 2q gates)
+        order = [(t, p) for t in terms_2q for p in pairs]
 
         for term, (wire_a, wire_b) in order:
             _apply_2q(term, params[idx], [wire_a, wire_b])
@@ -247,6 +219,15 @@ def _count_ancilla_coupling_params(n_2q_terms: int, n_system: int) -> int:
     if topo == "fake" and n_system > 2:
         n += n_2q_terms
     return n
+
+
+def _coupling_order_matters(saved: dict) -> bool:
+    """Whether the order of the ancilla couplings (gate type outer or connection outer) changes the circuit of a saved
+    generator: only with two or more connections and two or more 2q gate types (with ZZ_Z_X it never does)."""
+    n_system = saved.get("target_size", CFG.system_size)
+    n_connections = {"total": n_system, "bridge": 2, "ansatz": 1, "fake": 1 if n_system > 2 else 0}
+    terms = saved.get("ancilla_coupling_terms") or _ancilla_coupling_terms(_get_ansatz_terms())  # (older files' key)
+    return n_connections.get(saved.get("ancilla_topology"), 0) >= 2 and len(terms) >= 2
 
 
 # -- WIRE LAYOUT -----------------------------------------------------------
@@ -340,13 +321,12 @@ class Generator:
         self.ancilla_topology: str = CFG.ancilla_topology
         self.ancilla_coupling_layers = CFG.ancilla_coupling_layers
         self.do_ancilla_1q_gates: bool = CFG.do_ancilla_1q_gates
-        self.ancilla_coupling_terms = None if CFG.ancilla_coupling_terms is None else list(CFG.ancilla_coupling_terms)
         self.ansatz: str = CFG.gen_ansatz
+        self.custom_ansatz_terms = list(CFG.custom_ansatz_terms) if CFG.gen_ansatz == "custom" else None
         self.layers: int = CFG.gen_layers
         self.target_size: int = CFG.system_size
         self.target_hamiltonian: str = CFG.target_hamiltonian
         self.use_choi: bool = CFG.use_choi
-        self.gate_convention: str = CFG.gate_convention
 
         # -- parameters -------
         n_params = count_params(CFG.system_size, CFG.extra_ancilla)
@@ -376,18 +356,13 @@ class Generator:
     def _init_params(self, n_params: int) -> torch.Tensor:
         """Random uniform in [0, 2π), as a torch tensor with requires_grad=True.
 
-        Respects start_ancilla_gates_randomly: if False, ancilla gate params
-        are initialised to 0, or to N(0, ancilla_init_angle_scale^2) if that is set ("nudged" insertion).
+        Respects start_ancilla_gates_randomly: if False, ancilla gate params are initialised to 0.
         """
         params = torch.empty(n_params, dtype=rdtype()).uniform_(0, 2 * np.pi)
 
         if CFG.extra_ancilla and not CFG.start_ancilla_gates_randomly:
             ancilla_indices = self._get_ancilla_param_indices()
             params[ancilla_indices] = 0.0
-            if CFG.ancilla_init_angle_scale is not None:
-                params[ancilla_indices] = float(CFG.ancilla_init_angle_scale) * torch.randn(
-                    len(ancilla_indices), dtype=rdtype()
-                )
 
         params.requires_grad_(True)
         return params
@@ -479,11 +454,10 @@ class Generator:
     def _get_detached_matrices(self, dis):
         """Detach discriminator matrices safely.
         Even though the generator try to minimize the loss function, here
-        we only change the parameters of the Circuit
+        we only change the parameters of the Circuit.
+        (Computed once per critic update: Discriminator.detached_matrices.)
         """
-        with torch.no_grad():
-            A, B, psi, phi = dis.get_dis_matrices_rep()
-        return A.detach(), B.detach(), psi.detach(), phi.detach()
+        return dis.detached_matrices()
 
     # -- loss computation --------------------------------------------------
     def compute_loss(self, dis, final_target_state):
@@ -491,17 +465,20 @@ class Generator:
         total_gen_state = self.get_total_gen_state()
         final_gen_state = self.get_final_gen_state(total_gen_state)
 
-        dis_matrices = self._get_detached_matrices(dis)
-
         g = as_gen_state(final_gen_state)  # 1D state or (n_branches, d) for ancilla_mode "trace"
         t = final_target_state.reshape(-1)
 
+        if CFG.dis_eval == "spectral":  # the critic's terms in its eigenbases (detached), see qgan.dis_spectral
+            return spectral_cost(g, t, dis.detached_spectrum())
+
+        dis_matrices = self._get_detached_matrices(dis)
         return _calc_wasserstein(g, t, dis_matrices)
 
     # -- Loss for batching ----------
     def compute_loss_batch(self, dis, batch_inputs, batch_targets):
         """Compute average Wasserstein loss over a batch of input states (Haar)"""
-        dis_matrices = self._get_detached_matrices(dis)
+        spectral = CFG.dis_eval == "spectral"
+        critic = dis.detached_spectrum() if spectral else self._get_detached_matrices(dis)
         total_loss = torch.tensor(0.0, dtype=rdtype())
 
         for input_state, target_state in zip(batch_inputs, batch_targets):
@@ -509,7 +486,7 @@ class Generator:
             g = as_gen_state(get_final_gen_state_torch(gen_state))
             t = target_state.reshape(-1)
 
-            total_loss = total_loss + _calc_wasserstein(g, t, dis_matrices)
+            total_loss = total_loss + (spectral_cost(g, t, critic) if spectral else _calc_wasserstein(g, t, critic))
 
         return total_loss / len(batch_inputs)
 
@@ -555,13 +532,13 @@ class Generator:
             "ancilla_topology": self.ancilla_topology,
             "ancilla_coupling_layers": self.ancilla_coupling_layers,
             "do_ancilla_1q_gates": self.do_ancilla_1q_gates,
-            "ancilla_coupling_terms": self.ancilla_coupling_terms,
             "ansatz": self.ansatz,
+            "custom_ansatz_terms": self.custom_ansatz_terms,
             "layers": self.layers,
             "target_size": self.target_size,
             "target_hamiltonian": self.target_hamiltonian,
             "n_params": self.n_params,
-            "gate_convention": self.gate_convention,
+            "gate_convention": "uniform",  # (the only one now; older code checks it when loading)
             "optimizer_state": self.optimizer.state_dict(),
         }
         torch.save(save_dict, file_path)
@@ -602,25 +579,43 @@ class Generator:
         if saved.get("ansatz") != self.ansatz:
             print_and_log("ERROR: ansatz mismatch.\n", CFG.log_path)
             cant_load = True
+        elif saved.get("custom_ansatz_terms") is not None and saved["custom_ansatz_terms"] != self.custom_ansatz_terms:
+            # (files saved before this key existed: not checked)
+            print_and_log(f"ERROR: custom_ansatz_terms mismatch (saved {saved['custom_ansatz_terms']}, current "
+                          f"{self.custom_ansatz_terms}).\n", CFG.log_path)
+            cant_load = True
         if saved.get("layers") != self.layers:
             print_and_log("ERROR: layer count mismatch.\n", CFG.log_path)
             cant_load = True
         if saved.get("ancilla") and self.ancilla and saved.get("ancilla_topology") != self.ancilla_topology:
             print_and_log("ERROR: ancilla topology mismatch.\n", CFG.log_path)
             cant_load = True
-        # (keys absent in files saved before they existed: not checked)
-        for key in ("do_ancilla_1q_gates", "ancilla_coupling_terms"):
-            if saved.get("ancilla") and self.ancilla and key in saved and saved[key] != getattr(self, key):
-                print_and_log(f"ERROR: {key} mismatch (saved {saved[key]}, current {getattr(self, key)}).\n", CFG.log_path)
-                cant_load = True
-        # Files written by the fork before the merge have no key: they used the "fork" convention.
+        # (a key absent in files saved before it existed: not checked)
+        if saved.get("ancilla") and self.ancilla and "do_ancilla_1q_gates" in saved \
+                and saved["do_ancilla_1q_gates"] != self.do_ancilla_1q_gates:
+            print_and_log(f"ERROR: do_ancilla_1q_gates mismatch (saved {saved['do_ancilla_1q_gates']}, current "
+                          f"{self.do_ancilla_1q_gates}).\n", CFG.log_path)
+            cant_load = True
+        # Files of the code that had the option ancilla_coupling_terms (None: the ansatz's 2q gates, as now)
+        saved_terms = saved.get("ancilla_coupling_terms")
+        if saved.get("ancilla") and saved_terms is not None and list(saved_terms) != _ancilla_coupling_terms(
+                _get_ansatz_terms()):
+            print_and_log(f"ERROR: saved with ancilla_coupling_terms = {list(saved_terms)}, which this code no longer "
+                          "has (its ancilla couplings use the 2-qubit gates of the ansatz).\n", CFG.log_path)
+            cant_load = True
+        # Gates of the file: "uniform" (the gates of this code), or older conventions. Files written by the fork
+        # before the merge have no key ("fork": the same gates, but the ancilla couplings in the reverse order,
+        # connection outer and gate type inner), so they can be loaded when that order gives the same circuit.
         saved_conv = {"pennylane": "fork"}.get(saved.get("gate_convention", "fork"), saved.get("gate_convention", "fork"))
-        if saved_conv != self.gate_convention:
+        if saved_conv == "fork" and saved.get("ancilla") and _coupling_order_matters(saved):
             print_and_log(
-                "ERROR: gate_convention mismatch (angles of XX/YY/ZZ and/or the order of ancilla couplings differ). "
-                f"Saved: {saved_conv}, current: {self.gate_convention}.\n",
+                "ERROR: saved with the fork's order of ancilla couplings (connection outer), a different circuit "
+                "for this topology and ansatz.\n",
                 CFG.log_path,
             )
+            cant_load = True
+        elif saved_conv not in ("uniform", "fork"):
+            print_and_log(f"ERROR: saved with the {saved_conv!r} gates (other XX/YY/ZZ angles).\n", CFG.log_path)
             cant_load = True
         if cant_load:
             return False
@@ -648,7 +643,6 @@ class Generator:
             self._partial_load_params(
                 saved_params, saved_ancilla, saved.get("ancilla_topology"), saved.get("ancilla_coupling_layers", "all"),
                 saved.get("do_ancilla_1q_gates", CFG.do_ancilla_1q_gates),
-                saved.get("ancilla_coupling_terms", CFG.ancilla_coupling_terms),
             )
             self._refresh_state()
             print_and_log("Generator parameters partially loaded (ancilla diff, torch dict).\n", CFG.log_path)
@@ -659,27 +653,25 @@ class Generator:
 
     def _partial_load_params(
         self, saved_params: np.ndarray, saved_ancilla: bool, saved_topology: Optional[str], saved_coupling_layers=None,
-        saved_1q_gates: Optional[bool] = None, saved_coupling_terms: Optional[list[str]] = None,
+        saved_1q_gates: Optional[bool] = None,
     ) -> None:
         """Load system-only params when ancilla is added/removed.
 
         Identifies ancilla param indices in both saved and current configs,
         extracts system-only params, and copies them. The saved layout uses the saved ancilla settings
-        (files without the do_ancilla_1q_gates / ancilla_coupling_terms keys: the current ones).
+        (files without the do_ancilla_1q_gates key: the current one).
         """
         my_ancilla_idx = set(self._get_ancilla_param_indices()) if self.ancilla else set()
 
         saved_ancilla_idx = set()
         if saved_ancilla:
             # Temporarily swap config to compute saved model's ancilla indices
-            keys = ("extra_ancilla", "ancilla_topology", "do_ancilla_1q_gates", "ancilla_coupling_layers",
-                    "ancilla_coupling_terms")
+            keys = ("extra_ancilla", "ancilla_topology", "do_ancilla_1q_gates", "ancilla_coupling_layers")
             orig = {k: getattr(CFG, k) for k in keys}
             CFG.extra_ancilla = saved_ancilla
             CFG.ancilla_topology = saved_topology or CFG.ancilla_topology
             CFG.do_ancilla_1q_gates = CFG.do_ancilla_1q_gates if saved_1q_gates is None else saved_1q_gates
             CFG.ancilla_coupling_layers = saved_coupling_layers if saved_coupling_layers is not None else "all"
-            CFG.ancilla_coupling_terms = saved_coupling_terms
             try:
                 saved_ancilla_idx = set(self._get_ancilla_param_indices())
             finally:

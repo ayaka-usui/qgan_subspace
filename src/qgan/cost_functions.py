@@ -23,6 +23,7 @@ import numpy as np
 import torch
 
 from config import CFG
+from qgan.dis_spectral import spectral_cost
 
 
 def _calc_wasserstein(g, t, dis_matrices):
@@ -165,8 +166,14 @@ def compute_fidelity_and_cost(
 
     Returns:
         (fidelity, cost): both as floats.
+
+    The critic's matrices (or eigenbases, CFG.dis_eval = "spectral") are those of the last generator step when the
+    critic has not changed since (Discriminator.detached_matrices / detached_spectrum): the same values.
     """
     fidelity = compute_fidelity(final_target_state, final_gen_state)
-    dis_matrices = dis.get_dis_matrices_rep()
-    cost = _calc_wasserstein(final_gen_state, final_target_state, dis_matrices)
+    with torch.no_grad():
+        if CFG.dis_eval == "spectral":
+            cost = spectral_cost(final_gen_state, final_target_state, dis.detached_spectrum())
+        else:
+            cost = _calc_wasserstein(final_gen_state, final_target_state, dis.detached_matrices())
     return fidelity, cost.item()

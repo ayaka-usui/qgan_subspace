@@ -187,8 +187,6 @@ def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plate
     """
     Generates APS-style stitched plots comparing the changed run to the control run.
     """
-    import logging
-    
     try:
         for intial_plateau_idx in range(1, 100):
             plateau_base = os.path.join(base_path, f"initial_plateau_{intial_plateau_idx}") if common_initial_plateaus else base_path
@@ -500,7 +498,7 @@ def get_max_fidelity_from_file(fid_loss_path):
         return None
 
 def _sliding_pr(G: np.ndarray, window: int = 10) -> np.ndarray:
-    """Participation ratio of the windowed gradient outer-product matrix.
+    r"""Participation ratio of the windowed gradient outer-product matrix.
 
     For each step t (>= window-1), builds the GOP over the last `window`
     gradient rows:  M = (1/W) \sum g_t g_t^T   (shape n_params × n_params),
@@ -1844,7 +1842,7 @@ def plot_grad_trajectory(base_path, log_path, n_runs, common_initial_plateaus=Fa
             G_sys, _ = load_grad_blocks(grad_path)
             var_t = np.var(G_sys, axis=1)
             color = cmap(rep_i % 10)
-            ax.plot(np.arange(G.shape[0]), var_t,
+            ax.plot(np.arange(G_sys.shape[0]), var_t,
                     color=color, linewidth=1.3, alpha=0.85, label=label)
             # Fidelity overlay on right axis, scaled by fid_stride
             fids = _load_fidelity_curve(run_dir)
@@ -2404,7 +2402,7 @@ def plot_grad_norm_joined_all(base_path, log_path, n_runs,
 
 def plot_grad_norm_joined_mean(base_path, log_path, n_runs,
                                 common_initial_plateaus=False, run_names=None):
-    """Plot B: mean joined trajectory per config, with NaN-padding for early-exit reps.
+    r"""Plot B: mean joined trajectory per config, with NaN-padding for early-exit reps.
 
     Generates SEPARATE figures:
         - grad_norm_joined_mean.png        : ‖∇_sys C‖_2 (system params, mean over runs still training)
