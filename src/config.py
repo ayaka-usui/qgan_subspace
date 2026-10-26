@@ -250,12 +250,21 @@ class Config:
         # ------------------------------------
         #  - lamb, s, cst1, cst2, cst3: Constants for Wasserstein cost and gradient.
         #
+        #  - dis_module_cap: Maximum norm of the discriminator's psi and phi. They are scaled down to it whenever
+        #       they exceed it (when created or loaded, and after every update). This stops the rare runs whose random
+        #       initial discriminator is so large that the updates blow up (to inf and NaN):
+        #       + "auto": 6 * lamb * (4/3)^(system_size - 3), i.e. 60 for 3 qubits, 80 for 4 (lamb = 10). Above the
+        #         norms that normal training reaches, so normal runs are not changed by it.
+        #       + A number: that maximum.
+        #       + None: no maximum (runs started with it can only be continued with it).
+        #
         #############################################################################################
         self.lamb = float(10)
         self.s = np.exp(-1 / (2 * self.lamb)) - 1
         self.cst1 = (self.s / 2 + 1) ** 2
         self.cst2 = (self.s / 2) * (self.s / 2 + 1)
         self.cst3 = (self.s / 2) ** 2
+        self.dis_module_cap: Optional[float | str] = "auto"
 
         #############################################################################################
         # ----------------------------------
@@ -293,6 +302,12 @@ class Config:
         }
         self.gen_final_params_path: str = f"{self.base_data_path}/gen_final_params/gen_final_params.txt"
 
+    def dis_cap(self) -> Optional[float]:
+        """The maximum norm of psi and phi that dis_module_cap sets (None: no maximum)."""
+        if self.dis_module_cap == "auto":
+            return 6 * self.lamb * (4 / 3) ** (self.system_size - 3)
+        return self.dis_module_cap
+
     def show_data(self) -> str:
         """Return a dictionary with the current configuration data."""
         return (
@@ -329,7 +344,10 @@ class Config:
             "----------------------------------------------\n"
             f"l_rate: {self.l_rate},\n"
             f"momentum_coeff: {self.momentum_coeff},\n"
-            "================================================== \n"
+            # (printed only when set, so that the logs of earlier runs still match when continued without it)
+            + (f"dis_module_cap: {self.dis_module_cap} ({self.dis_cap():g}),\n"
+               if self.dis_module_cap is not None else "")
+            + "================================================== \n"
         )
 
 
