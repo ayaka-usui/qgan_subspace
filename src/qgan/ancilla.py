@@ -86,6 +86,8 @@ def compute_ancilla_entanglement_entropy(total_output_state: np.ndarray) -> floa
     Raises:
         ValueError: If eigenvalues fall outside the valid range [0, 1].
     """
+    if not np.isfinite(np.asarray(total_output_state)).all():  # a diverged run (NaN state): no value, no crash
+        return float("nan")
     rho_ancilla = get_ancilla_reduced_density_matrix(total_output_state)
     eigvals = np.real(np.linalg.eigvalsh(rho_ancilla))
 
@@ -114,6 +116,8 @@ def compute_bipartite_negativity(total_output_state: np.ndarray, global_i: int, 
     Returns:
         float: The Negativity between the two qubits.
     """
+    if not np.isfinite(np.asarray(total_output_state)).all():  # a diverged run (NaN state): no value, no crash
+        return float("nan")
     state = np.asarray(total_output_state).flatten()
     num_qubits = int(np.log2(state.size))
     if 2**num_qubits != state.size:

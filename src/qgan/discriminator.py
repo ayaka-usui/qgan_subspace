@@ -71,6 +71,17 @@ class Discriminator:
         for i in range(self.size):
             self.alpha[i] = -1 + 2 * np.random.random(len(self.herm))
             self.beta[i] = -1 + 2 * np.random.random(len(self.herm))
+        self.cap_norm()
+
+    def cap_norm(self):
+        """Scale psi and phi down to the maximum norm CFG.dis_cap() if they exceed it (dis_module_cap in config)."""
+        cap = CFG.dis_cap()
+        if cap is None:
+            return
+        for params in (self.alpha, self.beta):
+            norm = np.prod(np.abs(params[:, 0]) + np.linalg.norm(params[:, 1:], axis=1))  # ||h_1 x ... x h_n||
+            if norm > cap:  # (all rows by the same factor; a NaN norm, from a diverged run, is left as it is)
+                params *= (cap / norm) ** (1 / len(params))
 
     def get_psi_and_phi(self) -> np.ndarray:
         """Get matrix representation of real (psi) & imaginary (phi) part of the discriminator
@@ -138,6 +149,7 @@ class Discriminator:
         # Update the parameters later, to avoid affecting gradient computations:
         self.alpha = new_alpha
         self.beta = new_beta
+        self.cap_norm()
 
     def _compute_grad(self, final_target_state, final_gen_state, A, B, param: str) -> np.ndarray:
         """Calculate the gradient of the discriminator with respect to the param (alpha or beta).
@@ -349,6 +361,7 @@ class Discriminator:
         if saved_dis.size == self.size:  # This size check, already takes care into ancilla match!
             self.alpha = deepcopy(saved_dis.alpha)
             self.beta = deepcopy(saved_dis.beta)
+            self.cap_norm()
 
             print_and_log("Discriminator parameters loaded\n", CFG.log_path)
             return True
@@ -362,6 +375,7 @@ class Discriminator:
             # Load only the matching parameters
             self.alpha[:min_size] = saved_dis.alpha[:min_size].copy()
             self.beta[:min_size] = saved_dis.beta[:min_size].copy()
+            self.cap_norm()
 
             print_and_log("Discriminator parameters loaded partially (one qubit difference).\n", CFG.log_path)
             return True
