@@ -273,8 +273,13 @@ class Config:
         #   - dis_global_max_weight: Only for "global", keep only the Pauli strings acting on at most this number of
         #       qubits (None: all of them).
         #
-        #   - dis_module_cap: Maximum norm of psi and phi (None: no maximum). They are scaled down to it whenever
-        #       they exceed it (when created or loaded, and after every update).
+        #   - dis_module_cap: Maximum norm of psi and phi. They are scaled down to it whenever they exceed it (when
+        #       created or loaded, and after every update). This stops the rare runs whose random initial
+        #       discriminator is so large that the updates blow up (to inf and NaN):
+        #       + "auto": 6 * lamb * (4/3)^(system_size - 3), i.e. 60 for 3 qubits, 80 for 4 (lamb = 10). Above the
+        #         norms that normal training reaches, so normal runs are not changed by it.
+        #       + A number: that maximum.
+        #       + None: no maximum (runs started with it can only be continued with it).
         #
         #   - dis_new_ancilla_row: Discriminator term on the ancilla, when it is added to a loaded run:
         #       + "random": Random, like the other qubits.
@@ -290,7 +295,7 @@ class Config:
         #############################################################################################
         self.dis_type: Literal["local", "global"] = "local"
         self.dis_global_max_weight: Optional[int] = None
-        self.dis_module_cap: Optional[float] = None
+        self.dis_module_cap: Optional[float | Literal["auto"]] = "auto"
         self.dis_new_ancilla_row: Literal["random", "identity"] = "random"
         self.dis_ancilla_row_trainable: bool = True
         self.dis_eval: Literal["spectral", "exponentiation"] = "spectral"
@@ -377,6 +382,12 @@ class Config:
         self.cst2 = (self.s / 2) * (self.s / 2 + 1)
         self.cst3 = (self.s / 2) ** 2
 
+    def dis_cap(self) -> Optional[float]:
+        """The maximum norm of psi and phi that dis_module_cap sets (None: no maximum)."""
+        if self.dis_module_cap == "auto":
+            return 6 * self.lamb * (4 / 3) ** (self.system_size - 3)
+        return self.dis_module_cap
+
     def fields(self) -> list[str]:
         """Names of the settable fields (every public attribute except the derived ones)."""
         return [k for k in vars(self) if not k.startswith("_") and k not in self._DERIVED]
@@ -404,8 +415,9 @@ class Config:
             raise ValueError(f"dis_type must be 'local' or 'global', got {self.dis_type!r}.")
         if self.dis_global_max_weight is not None and self.dis_type != "global":
             raise ValueError("dis_global_max_weight only applies to dis_type='global' (set it to None).")
-        if self.dis_module_cap is not None and not self.dis_module_cap > 0:
-            raise ValueError(f"dis_module_cap must be None or > 0, got {self.dis_module_cap!r}.")
+        if self.dis_module_cap not in (None, "auto") and not (isinstance(self.dis_module_cap, (int, float))
+                                                            and self.dis_module_cap > 0):
+            raise ValueError(f"dis_module_cap must be 'auto', None or > 0, got {self.dis_module_cap!r}.")
         if self.dis_eval not in ("spectral", "exponentiation"):
             raise ValueError(f"dis_eval must be 'spectral' or 'exponentiation', got {self.dis_eval!r}.")
         if self.dis_eval == "spectral" and self.dis_type != "local":
@@ -468,11 +480,12 @@ class Config:
             f"reset_optimizer_on_load: {self.reset_optimizer_on_load}\n"
             f"dis_new_ancilla_row: {self.dis_new_ancilla_row}\n"
             f"dis_ancilla_row_trainable: {self.dis_ancilla_row_trainable}\n"
-            # printed only when not the default, so that the logs of earlier runs still match in
-            # training_init._check_for_previous_multiple_runs
+            # printed only when set (dis_type other than "local", dis_module_cap other than None), so that the
+            # logs of earlier runs, which have neither, still match in training_init._check_for_previous_multiple_runs
             + (f"dis_type: {self.dis_type}\ndis_global_max_weight: {self.dis_global_max_weight}\n"
                if self.dis_type != "local" else "")
-            + (f"dis_module_cap: {self.dis_module_cap}\n" if self.dis_module_cap is not None else "")
+            + (f"dis_module_cap: {self.dis_module_cap} ({self.dis_cap():g})\n"
+               if self.dis_module_cap is not None else "")
             + f"precision: {self.precision}\n"
             f"{sep}\n"
             f"time_to_evolve: {self.time_to_evolve},\n"

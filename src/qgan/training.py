@@ -265,6 +265,11 @@ class Training:
         )
 
         # -- Stopping conditions -----------------------------------
+        if not (np.isfinite(epoch["fidelities"][-1]) and np.isfinite(epoch["losses"][-1])):
+            print_and_log("\n==================================================\n", CFG.log_path)
+            print_and_log("\nTraining diverged (non-finite fidelity or loss): stopping this run.", CFG.log_path)
+            return True
+
         if self._num_epochs >= CFG.epochs:
             print_and_log(
                 "\n==================================================\n",

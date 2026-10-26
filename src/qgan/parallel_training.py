@@ -165,6 +165,14 @@ class BatchedQWGAN:
             for k in torch.nonzero(norm > self.cap * (1 - 1e-9)).flatten().tolist():  # capped_rows decides exactly
                 p[k] = capped_rows(p[k], self.cap, n_scaled)
 
+    @torch.no_grad()
+    def nonfinite_rows(self) -> list[int]:
+        """Batch positions of the runs whose parameters, critic or generator output are not finite (diverged)."""
+        finite = torch.isfinite(self.theta).all(dim=1) & torch.isfinite(self.states).flatten(1).all(dim=1)
+        for p in (self.alpha, self.beta):
+            finite &= torch.isfinite(p).flatten(1).all(dim=1)
+        return torch.nonzero(~finite).flatten().tolist()
+
     def critic_step(self) -> None:
         """One critic step at the current (detached) generator outputs (the optimiser minimises -W; a frozen row
         keeps its value)."""
@@ -358,7 +366,7 @@ class ParallelTraining:
                 gen.circuit, gen.choi_input, first.final_target_state, rows["theta"], rows["alpha"], rows["beta"],
                 rdt=gen.params.dtype, sgd_gen=_sgd_settings(gen.optimizer), sgd_dis=_sgd_settings(dis.optimizer),
                 buffers=rows["buffers"], freeze=not CFG.dis_ancilla_row_trainable and dis.ancilla
-                and dis.ancilla_mode == "pass", mask=mask, cap=CFG.dis_module_cap, states=rows["states"])
+                and dis.ancilla_mode == "pass", mask=mask, cap=CFG.dis_cap(), states=rows["states"])
             self.capacity, note = max_runs_together(self.engine, len(self.specs))
             print(f"Runs trained together: {note}", flush=True)
         new = []
@@ -394,8 +402,31 @@ class ParallelTraining:
     def _step(self) -> None:
         for _ in range(CFG.steps_dis):
             self.engine.critic_step()
+            self._drop_diverged()
         for _ in range(CFG.steps_gen):
             self.engine.generator_step()
+            self._drop_diverged()
+
+    def _drop_diverged(self) -> None:
+        """Runs whose parameters or generator output are no longer finite stop now, as a run that ends (a last NaN
+        fidelity and loss, "Training diverged" in its log, its files saved), so that the NaN of one run never reaches the
+        next batched computation of the others (a batched eigendecomposition can raise for the whole batch)."""
+        bad = self.engine.nonfinite_rows() if self.active else []
+        if not bad:
+            return
+        self._sync(bad, final=True)
+        for k in bad:
+            i, tr = self.active[k]
+            apply_run(self.specs[i])
+            tr._epoch["fidelities"].append(float("nan"))
+            tr._epoch["losses"].append(float("nan"))
+            tr._end_epoch(plotter=self._plot)  # (stops it: its last fidelity is not finite)
+            tr._finish()
+            if self.specs[i].get("done"):
+                print_and_log(self.specs[i]["done"], CFG.log_path)
+        keep = [k for k in range(len(self.active)) if k not in bad]
+        self.active = [self.active[k] for k in keep]
+        self.engine.keep(keep)
 
     @torch.no_grad()
     def _evaluate(self) -> list[tuple]:
@@ -429,6 +460,8 @@ class ParallelTraining:
                     tr._start_epoch()
                 for epoch_iter in range(CFG.iterations_epoch):
                     self._step()
+                    if not self.active:  # (every run diverged: the next _fill refills the batch)
+                        break
                     if epoch_iter % CFG.save_fid_and_loss_every_x_iter == 0:  # (the log lines are a subset)
                         evaluations = self._evaluate()
                         if CFG.compute_entanglement:  # its diagnostics read the generators' parameters and outputs

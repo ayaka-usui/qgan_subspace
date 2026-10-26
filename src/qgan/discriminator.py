@@ -184,8 +184,8 @@ class Discriminator(nn.Module):
         beta0 = -1 + 2 * torch.rand(self.size, 4, dtype=rdtype())
         # The last rows as drawn: the factor of an ancilla added when loading (dis_new_ancilla_row = "random")
         self._new_ancilla_rows = (alpha0[-1].clone(), beta0[-1].clone())
-        if CFG.dis_module_cap is not None:  # operator norms ||psi||, ||phi|| at most dis_module_cap (see config)
-            alpha0, beta0 = (capped_rows(c, CFG.dis_module_cap) for c in (alpha0, beta0))
+        if CFG.dis_cap() is not None:  # operator norms ||psi||, ||phi|| at most dis_module_cap (see config)
+            alpha0, beta0 = (capped_rows(c, CFG.dis_cap()) for c in (alpha0, beta0))
         if self.dis_type == "local":
             self.alpha = nn.Parameter(alpha0)
             self.beta = nn.Parameter(beta0)
@@ -238,11 +238,13 @@ class Discriminator(nn.Module):
         """CFG.dis_module_cap: scale psi and phi down to that operator norm if they exceed it (no-op if None).
         Local critic: all rows by the same factor, except a frozen ancilla row (dis_ancilla_row_trainable = False),
         which keeps its value. Global critic: all coefficients (the operator norm from its eigenvalues)."""
-        cap = CFG.dis_module_cap
+        cap = CFG.dis_cap()
         if cap is None:
             return
         if self.dis_type == "global":
             for p in (self.alpha, self.beta):
+                if not torch.isfinite(p).all():  # a diverged run: nothing to cap (eigvalsh would raise)
+                    continue
                 norm = torch.linalg.eigvalsh(pauli_expand(self._full(p), self.size)).abs().max()
                 if norm > cap:
                     p.mul_(cap / norm.to(p.dtype))

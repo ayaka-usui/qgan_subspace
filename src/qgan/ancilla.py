@@ -256,6 +256,8 @@ def ancilla_block_diagnostics(K00: torch.Tensor, K10: torch.Tensor, V: torch.Ten
         k00_sv_ratio : smallest / largest singular value of K00 (1 = K00 proportional to a unitary)
     """
     d = V.shape[0]
+    if not (torch.isfinite(K00).all() and torch.isfinite(K10).all()):  # a diverged run (NaN state): no crash
+        return dict.fromkeys(("p0", "F_joint", "F_post", "F_trace", "purity_anc", "k00_sv_ratio"), float("nan"))
     with torch.no_grad():
         n00 = (K00.conj() * K00).real.sum() / d
         n11 = (K10.conj() * K10).real.sum() / d
@@ -348,6 +350,8 @@ def get_ancilla_reduced_density_matrix(total_output_state) -> np.ndarray:
 
 def compute_ancilla_entanglement_entropy(total_output_state) -> float:
     """Von Neumann entropy S(rho_anc) = -Tr(rho log2 rho) of the ancilla (last qubit)."""
+    if not np.isfinite(np.asarray(total_output_state)).all():  # a diverged run (NaN state): no value, no crash
+        return float("nan")
     eigvals = np.real(np.linalg.eigvalsh(get_ancilla_reduced_density_matrix(total_output_state)))
     if np.any(eigvals < -1e-6) or np.any(eigvals > 1.0 + 1e-6):  # looser than upstream: float32 states
         raise ValueError(f"Eigenvalues of reduced density matrix must be in [0, 1], but got: {eigvals}")
@@ -360,6 +364,8 @@ def compute_ancilla_entanglement_entropy(total_output_state) -> float:
 
 def compute_bipartite_negativity(total_output_state, global_i: int, global_j: int) -> float:
     """Negativity N = (||rho_ij^{T_i}||_1 - 1)/2 between two qubits of a pure state vector."""
+    if not np.isfinite(np.asarray(total_output_state)).all():  # a diverged run (NaN state): no value, no crash
+        return float("nan")
     state = np.asarray(total_output_state).flatten()
     num_qubits = int(np.log2(state.size))
     if 2**num_qubits != state.size:
