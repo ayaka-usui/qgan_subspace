@@ -13,6 +13,7 @@
 # limitations under the License.
 """Training initialization module for running training instances"""
 
+import copy
 import itertools
 import os
 import re
@@ -170,9 +171,10 @@ def execute_from_no_common_initial_plateaus(base_path):
     last_idx = 0 if CFG.load_timestamp is None else get_last_experiment_idx(base_path, common_initial_plateaus=False)
     CFG.load_timestamp = None  # Clear load_timestamp after using it
 
+    base_values = _get_base_values_of_new_configs()
     for run_idx, config_dict in enumerate(CFG.reps_new_config, 1):
         new_run_idx = last_idx + run_idx
-        CFG.update(**config_dict)  # (checked, and derived values such as the paths and cst1-3 recomputed)
+        _apply_new_config(config_dict, base_values)
         specs = [
             {
                 "base_data_path": f"{base_path}/experiment{new_run_idx}/{rep + 1}",
@@ -219,12 +221,24 @@ def execute_from_common_initial_plateaus(base_path):
         print_and_log("\nFollowing previous MULTIPLE run, control experiments will be skipped.\n", CFG.log_path)
 
     # -- Run changed experiments from each initial plateau, for each config in reps_new_config:
+    base_values = _get_base_values_of_new_configs()
     for run_idx, config_dict in enumerate(CFG.reps_new_config, 1):
         new_run_idx = last_idx + run_idx
-        CFG.update(**config_dict)  # (checked, and derived values such as the paths and cst1-3 recomputed)
+        _apply_new_config(config_dict, base_values)
         # Each config gets its own run subdir
         print_and_log(f"\nRunning changed_run{new_run_idx}.\n", CFG.log_path)
         _run_repeated_experiments(N_initial_plateaus, N_reps_each_init_plateau, base_path, f"changed_run{new_run_idx}")
+
+
+def _get_base_values_of_new_configs() -> dict:
+    """Snapshot the base CFG values of every key that any config in `CFG.reps_new_config` changes."""
+    keys = {key for config_dict in CFG.reps_new_config for key in config_dict}
+    return {key: copy.deepcopy(getattr(CFG, key)) for key in keys if key in CFG.fields()}  # (unknown: update raises)
+
+
+def _apply_new_config(config_dict: dict, base_values: dict):
+    """Reset CFG to the base values first, so no setting leaks from a previous config, then apply this config."""
+    CFG.update(**{**copy.deepcopy(base_values), **config_dict})  # (checked, and derived values recomputed)
 
 
 def _run_initial_plateaus(N_initial_plateaus: int, base_path: str):
