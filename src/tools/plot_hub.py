@@ -504,14 +504,14 @@ def collect_latest_changed_fidelities_nested(base_path, common_initial_plateaus,
     run_dirs = {}
     if common_initial_plateaus:
         pattern = (
-            rf"initial_plateau_(\d+)/repeated_changed_run{run_idx}/(\d+)/fidelities$"
+            rf"initial_plateau_(\d+)[/\\]repeated_changed_run{run_idx}[/\\](\d+)[/\\]fidelities$"
             if run_idx is not None
-            else r"initial_plateau_(\d+)/repeated_changed_run(\d+)/(\d+)/fidelities$"
+            else r"initial_plateau_(\d+)[/\\]repeated_changed_run(\d+)[/\\](\d+)[/\\]fidelities$"
         )
     elif run_idx is not None:
-        pattern = rf"experiment{run_idx}/(\d+)/fidelities$"
+        pattern = rf"experiment{run_idx}[/\\](\d+)[/\\]fidelities$"
     else:
-        pattern = r"experiment(\d+)/(\d+)/fidelities$"
+        pattern = r"experiment(\d+)[/\\](\d+)[/\\]fidelities$"
     for root, dirs, files in os.walk(base_path):
         m = re.search(pattern, root)
         if m and "log_fidelity_loss.txt" in files:
@@ -822,7 +822,7 @@ def _collect_all_plateau_ids(base_path):
     ids = set()
     # look for initial_plateau_X
     for root, dirs, files in os.walk(base_path):
-        if m := re.search(r"initial_plateau_(\d+)(?=/|$)", root):
+        if m := re.search(r"initial_plateau_(\d+)(?=[/\\]|$)", root):
             ids.add(int(m[1]))
     return sorted(ids)
 

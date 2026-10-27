@@ -20,7 +20,7 @@ import numpy as np
 
 def train_log(param, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "a") as file:
+    with open(file_path, "a", encoding="utf-8") as file:
         file.write(param)
 
 

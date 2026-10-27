@@ -146,7 +146,7 @@ def _check_for_previous_multiple_runs():
     prev_log_path = f"./generated_data/{CFG.load_timestamp}/initial_plateau_1/logs/log.txt"
     if not os.path.exists(prev_log_path):
         raise RuntimeError(f"Previous run log not found: {prev_log_path}")
-    with open(prev_log_path, "r") as f:
+    with open(prev_log_path, "r", encoding="utf-8") as f:
         log_content = f.read()
     # Only check for a subset of config fields (excluding run_timestamp and load_timestamp.)
     config_str = CFG.show_data()
