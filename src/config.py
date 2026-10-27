@@ -1,4 +1,4 @@
-# Copyright 2025 GIQ, Universitat Autònoma de Barcelona
+i  # Copyright 2025 GIQ, Universitat Autònoma de Barcelona
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -320,7 +320,10 @@ class Config:
         #############################################################################################
         self.time_to_evolve: float = 1.0  # Time to evolve with the Hamiltonian, for the target state preparation.
         self.target_hamiltonian: Literal["cluster_h", "rotated_surface_h", "ising_h", "custom_h"] = "custom_h"
-        self.custom_hamiltonian_terms: Optional[list[str]] = ["ZZZ", "XXX"]  # "I", "X", "Y", "Z", "XX", "XZ", "ZZZ", ...
+        self.custom_hamiltonian_terms: Optional[list[str]] = [
+            "ZZZ",
+            "XXX",
+        ]  # "I", "X", "Y", "Z", "XX", "XZ", "ZZZ", ...
         self.custom_hamiltonian_strengths: Optional[list[float]] = [1.0, 0.4]  # Strengths for the above terms.
 
         #############################################################################################
@@ -415,8 +418,9 @@ class Config:
             raise ValueError(f"dis_type must be 'local' or 'global', got {self.dis_type!r}.")
         if self.dis_global_max_weight is not None and self.dis_type != "global":
             raise ValueError("dis_global_max_weight only applies to dis_type='global' (set it to None).")
-        if self.dis_module_cap not in (None, "auto") and not (isinstance(self.dis_module_cap, (int, float))
-                                                            and self.dis_module_cap > 0):
+        if self.dis_module_cap not in (None, "auto") and not (
+            isinstance(self.dis_module_cap, (int, float)) and self.dis_module_cap > 0
+        ):
             raise ValueError(f"dis_module_cap must be 'auto', None or > 0, got {self.dis_module_cap!r}.")
         if self.dis_eval not in ("spectral", "exponentiation"):
             raise ValueError(f"dis_eval must be 'spectral' or 'exponentiation', got {self.dis_eval!r}.")
@@ -482,10 +486,16 @@ class Config:
             f"dis_ancilla_row_trainable: {self.dis_ancilla_row_trainable}\n"
             # printed only when set (dis_type other than "local", dis_module_cap other than None), so that the
             # logs of earlier runs, which have neither, still match in training_init._check_for_previous_multiple_runs
-            + (f"dis_type: {self.dis_type}\ndis_global_max_weight: {self.dis_global_max_weight}\n"
-               if self.dis_type != "local" else "")
-            + (f"dis_module_cap: {self.dis_module_cap} ({self.dis_cap():g})\n"
-               if self.dis_module_cap is not None else "")
+            + (
+                f"dis_type: {self.dis_type}\ndis_global_max_weight: {self.dis_global_max_weight}\n"
+                if self.dis_type != "local"
+                else ""
+            )
+            + (
+                f"dis_module_cap: {self.dis_module_cap} ({self.dis_cap():g})\n"
+                if self.dis_module_cap is not None
+                else ""
+            )
             + f"precision: {self.precision}\n"
             f"{sep}\n"
             f"time_to_evolve: {self.time_to_evolve},\n"

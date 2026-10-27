@@ -29,7 +29,7 @@ def train_log(param, file_path):
     """It ensures that the folder where you are going to save the file exists.
     If it does not exist, it creates it."""
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "a") as file:  # Opens it in 'append' mode
+    with open(file_path, "a", encoding="utf-8") as file:  # Opens it in 'append' mode
         file.write(param)
 
 

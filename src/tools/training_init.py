@@ -138,7 +138,7 @@ def _check_for_previous_multiple_runs():
     prev_log_path = f"./generated_data/{CFG.load_timestamp}/initial_plateau_1/logs/log.txt"
     if not os.path.exists(prev_log_path):
         raise RuntimeError(f"Previous run log not found: {prev_log_path}")
-    with open(prev_log_path, "r") as f:
+    with open(prev_log_path, "r", encoding="utf-8") as f:
         log_content = f.read()
     for key, value in _REMOVED_OPTIONS.items():
         log_content = re.sub(rf"^{key}: {re.escape(value)}\n", "", log_content, flags=re.M)

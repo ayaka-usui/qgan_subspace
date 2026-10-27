@@ -13,6 +13,8 @@
 # limitations under the License.
 """Main module for running the quantum GAN training"""
 
+import sys
+
 from config import CFG
 from tools.training_init import run_multiple_trainings, run_single_training
 
@@ -25,4 +27,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # The logs print "═"/"─", which Windows code pages (cp1252) cannot encode when stdout is redirected to a file
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     main()
