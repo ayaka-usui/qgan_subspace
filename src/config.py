@@ -1,4 +1,4 @@
-i  # Copyright 2025 GIQ, Universitat Autònoma de Barcelona
+# Copyright 2025 GIQ, Universitat Autònoma de Barcelona
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -486,16 +486,10 @@ class Config:
             f"dis_ancilla_row_trainable: {self.dis_ancilla_row_trainable}\n"
             # printed only when set (dis_type other than "local", dis_module_cap other than None), so that the
             # logs of earlier runs, which have neither, still match in training_init._check_for_previous_multiple_runs
-            + (
-                f"dis_type: {self.dis_type}\ndis_global_max_weight: {self.dis_global_max_weight}\n"
-                if self.dis_type != "local"
-                else ""
-            )
-            + (
-                f"dis_module_cap: {self.dis_module_cap} ({self.dis_cap():g})\n"
-                if self.dis_module_cap is not None
-                else ""
-            )
+            + (f"dis_type: {self.dis_type}\ndis_global_max_weight: {self.dis_global_max_weight}\n"
+               if self.dis_type != "local" else "")
+            + (f"dis_module_cap: {self.dis_module_cap} ({self.dis_cap():g})\n"
+               if self.dis_module_cap is not None else "")
             + f"precision: {self.precision}\n"
             f"{sep}\n"
             f"time_to_evolve: {self.time_to_evolve},\n"
