@@ -1,3 +1,7 @@
+# Copyright 2025 GIQ, Universitat Autònoma de Barcelona
+#
+# Licensed under the MIT License. See the LICENSE file in the project root for the full license text.
+# SPDX-License-Identifier: MIT
 """Exact tensor-product (eigenbasis) evaluation of the Wasserstein cost.
 
 The discriminator observables are tensor products of single-qubit Hermitians,
