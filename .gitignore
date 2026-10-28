@@ -8,5 +8,8 @@ generated_data/
 *cache*
 .DS_Store
 *test*
-analysis/
 *summary*
+
+# Managed outside the repository for now
+docs/
+analysis/
