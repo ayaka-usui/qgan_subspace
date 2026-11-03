@@ -989,7 +989,7 @@ def scatter_plateau_avg_fidelity(base_path, log_path, n_runs, max_fidelity, run_
     ax = plt.gca()
     ax.axhline(100 * max_fidelity, color="C0", linestyle="-", label=f"max_fidelity={max_fidelity}")
     plateau_ids = _collect_all_plateau_ids(base_path)
-    cmap = plt.cm.get_cmap("tab20", max(1, len(plateau_ids)))
+    cmap = mpl.colormaps["tab20"].resampled(max(1, len(plateau_ids)))
     plateau_colors = {pid: cmap(i % cmap.N) for i, pid in enumerate(plateau_ids)}
     line_colors = {pid: _pastelize(plateau_colors[pid], 0.5) for pid in plateau_ids}
 
@@ -1127,7 +1127,7 @@ def scatter_plateau_success(base_path, log_path, n_runs, max_fidelity, run_names
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
     plateau_ids = _collect_all_plateau_ids(base_path)
-    cmap = plt.cm.get_cmap("tab20", max(1, len(plateau_ids)))
+    cmap = mpl.colormaps["tab20"].resampled(max(1, len(plateau_ids)))
     plateau_colors = {pid: cmap(i % cmap.N) for i, pid in enumerate(plateau_ids)}
     line_colors = {pid: _pastelize(plateau_colors[pid], 0.5) for pid in plateau_ids}
 
