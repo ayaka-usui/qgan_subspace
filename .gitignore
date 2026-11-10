@@ -13,3 +13,6 @@ generated_data/
 # Managed outside the repository for now
 docs/
 analysis/
+
+# Jupyter
+.ipynb_checkpoints/

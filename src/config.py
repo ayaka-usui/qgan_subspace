@@ -174,7 +174,7 @@ class Config:
         #
         ###############################################################################################
         self.system_size: int = 3
-        self.extra_ancilla: bool = True
+        self.extra_ancilla: bool = False
         self.ancilla_topology: Optional[Literal["disconnected", "ansatz", "bridge", "total", "fake"]] = "bridge"
         self.ancilla_connect_to: Optional[int] = None  # None means connected to last one, otherwise to the specified.
         self.do_ancilla_1q_gates: bool = True  # Whether to include 1-qubit gates for ancilla qubit.
