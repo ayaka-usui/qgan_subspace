@@ -38,10 +38,10 @@ The code runs on the CPU. Without a GPU, the CPU build of PyTorch is a much smal
 ## Running experiments
 
 1. **Configure.** Every setting is a field of the `Config` class in [`src/config.py`](src/config.py), documented
-   there: the target Hamiltonian, the generator ansatz and number of layers, the auxiliary qubit (`ancilla_*` fields:
-   its topology, and what the critic sees of it, `ancilla_mode = "pass" | "trace" | "project"`; the paper uses
-   `"pass"`, the auxiliary qubit returned and compared with $|0\rangle$, its Eq. (4)), the critic (local, as in the
-   paper, or global), the optimiser, the number of epochs, and which experiment to run:
+   there: the target Hamiltonian, the generator ansatz and number of layers, the auxiliary qubit (its topology, and
+   what the critic sees of it, `ancilla_mode = "pass" | "trace" | "project"`; the paper uses `"pass"`, the auxiliary
+   qubit returned and compared with $|0\rangle$, its Eq. (4)), the critic (local, as in the paper, or global), the
+   optimiser, the number of epochs, and which experiment to run:
    - a single training (`run_multiple_experiments = False`);
    - several settings trained from scratch, `N_reps_if_from_scratch` times each (`common_initial_plateaus = False`,
      one setting per entry of `reps_new_config`);
