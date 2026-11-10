@@ -4,28 +4,27 @@ Quantum Wasserstein GANs (QWGANs) that learn the time evolution $U_T = e^{-iH_Tt
 through its Choi state, with an optional **auxiliary qubit (ancilla)** coupled to the generator: from the start, or
 inserted midway through training, once the fidelity has stalled on a plateau.
 
+This `main` branch keeps the original NumPy implementation, used for the paper by A. Usui, G. Abad-López, H. SV,
+A. Sanpera and S. S. Bhattacharya, *Entanglement-assisted Hamiltonian dynamics learning* (2026),
+[arXiv:2602.15931](https://arxiv.org/abs/2602.15931). The ancilla (the auxiliary qubit of the paper) is always
+compared with $|0\rangle$, and the critic's gradient uses an approximation of the derivative of its matrix
+exponentials. As a result, its training trajectories differ a bit from those of `pennylane-claude`.
+
 > [!IMPORTANT]
-> **Looking for the code of our paper? Use the
+> **Looking for the fastest implementation? Use the
 > [`pennylane-claude`](https://github.com/ayaka-usui/qgan_subspace/tree/pennylane-claude) branch.**
 >
 > ```bash
 > git clone -b pennylane-claude https://github.com/ayaka-usui/qgan_subspace.git
 > ```
 >
-> That branch holds the current implementation (PennyLane and PyTorch), which produced the most demanding runs of the
-> paper by A. Usui, G. Abad-López, H. SV, A. Sanpera and S. S. Bhattacharya, *Entanglement-assisted Hamiltonian
-> dynamics learning* (2026), [arXiv:2602.15931](https://arxiv.org/abs/2602.15931). Its guided notebook,
-> [`tutorial.ipynb`](https://github.com/ayaka-usui/qgan_subspace/blob/pennylane-claude/tutorial.ipynb), shows step by
-> step how to obtain results like the paper's main ones. Unlike this branch, that code computes the critic's gradients
-> exactly and simulates many trainings together in one batch, which makes it much faster.
->
-> This branch has its own version of that notebook, [`tutorial.ipynb`](tutorial.ipynb), adapted to its code. **The
-> outputs saved in it were generated with the `pennylane-claude` branch.** Run here, it trains everything again with
-> this branch's NumPy code, which is much slower: its first cell is set to a small demonstration, of roughly 1.5 hours.
+> Written in PennyLane and PyTorch, it computes the critic's gradients exactly and simulates many trainings together
+> in one batch: roughly a hundred times faster than this branch.
 
-This `main` branch keeps the original numpy implementation. The ancilla (the auxiliary qubit of the paper) is always
-compared with $|0\rangle$, and the critic's gradient uses an approximation of the derivative of its matrix
-exponentials. As a result, its training trajectories differ a bit from those of `pennylane-claude`.
+**New here?** The notebook [`tutorial.ipynb`](tutorial.ipynb) shows step by step how to obtain results like the
+paper's main ones. **Its saved outputs were generated with the `pennylane-claude` branch.** Run here, it trains
+everything again with this branch's code, much more slowly: its first cell is set to a small demonstration of roughly
+1.5 hours.
 
 ## Installation
 
