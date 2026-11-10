@@ -16,6 +16,11 @@ mpl.use("Agg")
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 
+# One style for every figure the code saves (set once, when this module is imported)
+plt.rcParams.update(
+    {"font.family": "serif", "font.size": 10, "axes.labelsize": 10, "legend.fontsize": 8, "figure.dpi": 300}
+)
+
 
 ########################################################################
 # MAIN PLOTTING FUNCTION
@@ -155,6 +160,18 @@ def plt_fidelity_vs_iter(fidelities, losses, config, indx=0, entropies=None, neg
 #########################################################################
 # STITCHED POST-PROCESSING PLOTTING
 #########################################################################
+def _logged_setting(run_dir, name, default):
+    """A setting of a saved run, read from the configuration printed at the top of its logs/log.txt."""
+    try:
+        with open(os.path.join(run_dir, "logs", "log.txt"), encoding="utf-8") as log:
+            for line in log:
+                if line.startswith(f"{name}:"):
+                    return type(default)(line.split(":", 1)[1].strip().rstrip(","))
+    except (OSError, ValueError):
+        pass
+    return default
+
+
 def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plateaus):
     """
     Generates APS-style stitched plots comparing the changed run to the control run.
@@ -193,28 +210,13 @@ def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plate
             ch_ent_arr = np.loadtxt(ch_ent) if os.path.exists(ch_ent) else []
             co_ent_arr = np.loadtxt(co_ent) if os.path.exists(co_ent) else []
 
-            plt.rcParams.update(
-                {
-                    "font.family": "serif",
-                    "font.size": 10,
-                    "axes.labelsize": 10,
-                    "legend.fontsize": 8,
-                    "figure.figsize": (5.2, 4.8),
-                    "figure.dpi": 300,
-                }
-            )
+            fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(5.2, 4.8))
 
-            fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-
-            try:
-                from config import CFG
-                max_iters_p1 = CFG.epochs * CFG.iterations_epoch
-                fid_int = CFG.save_fid_and_loss_every_x_iter
-                ent_int = fid_int  # entropy/negativity are computed at the fidelity cadence
-            except:
-                max_iters_p1 = 3000
-                fid_int = 10
-                ent_int = 10
+            # The settings of the run being plotted, from its own log (the current CFG may differ: a replot leaves it
+            # at the defaults of src/config.py). The first phase ends where its fidelity record ends.
+            fid_int = _logged_setting(plateau_base, "save_fid_and_loss_every_x_iter", 10)
+            ent_int = fid_int  # entropy/negativity are computed at the fidelity cadence
+            max_iters_p1 = len(p_fid_arr) * fid_int
 
             idx_split = max_iters_p1
             iters_p = np.arange(len(p_fid_arr)) * fid_int
@@ -270,7 +272,7 @@ def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plate
             try:
                 from qgan.ancilla import negativity_pairs
 
-                pairs = [label for label, _, _ in negativity_pairs(CFG.system_size, True)]
+                pairs = [label for label, _, _ in negativity_pairs(_logged_setting(plateau_base, "system_size", 3), True)]
             except Exception:
                 pairs = ["1-2", "1-3", "2-3", "1-a", "2-a", "3-a"]
             has_negs = False
@@ -322,7 +324,7 @@ def plot_stitched_observables(base_path, log_path, run_idx, common_initial_plate
             fig.savefig(save_path)
             plt.close(fig)
     except Exception as e:
-        print_and_log(f"Failed to generate stitched plot {save_path}: {e}", log_path)
+        print_and_log(f"Failed to generate the stitched plots of run {run_idx}: {e}", log_path)
 
     print_and_log(f"Saved all stitched evolution plots for run {run_idx}", log_path)
 

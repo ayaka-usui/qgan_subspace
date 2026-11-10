@@ -20,3 +20,6 @@ variance_analysis/
 # Managed outside the repository for now
 docs/
 analysis/
+
+# For JupyterLab users:
+.ipynb_checkpoints/
