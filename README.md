@@ -64,7 +64,8 @@ The code runs on the CPU. Without a GPU, the CPU build of PyTorch is a much smal
    Each run is saved to `generated_data/<timestamp>/`: its log (`logs/log.txt`, which starts with the full
    configuration), the fidelity and cost records (`fidelities/log_fidelity_loss.txt`, one column: the fidelities, then
    the costs), the trained models (`saved_model/`, from which `load_timestamp` continues a run), the final angles, the
-   auxiliary-qubit diagnostics, and plots. A multiple run adds summary plots comparing its settings.
+   auxiliary-qubit diagnostics, and plots. A multiple run adds summary plots comparing its settings. Errors during a
+   multiple run are written to its log.
 
 3. **Replot** a saved multiple run with your own labels: set `time_stamp_to_replot`, `run_names` and `x_label` in
    [`src/replot.py`](src/replot.py), then run `python src/replot.py`.
