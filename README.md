@@ -7,7 +7,8 @@ inserted midway through training, once the fidelity has stalled on a plateau.
 This `main` branch keeps the original NumPy implementation, used for the paper by A. Usui, G. Abad-López, H. SV,
 A. Sanpera and S. S. Bhattacharya, *Entanglement-assisted Hamiltonian dynamics learning* (2026),
 [arXiv:2602.15931](https://arxiv.org/abs/2602.15931). The ancilla is always compared with $|0\rangle$, and the
-critic's gradient uses an approximation of the derivative of its matrix exponentials. As a result, its training trajectories differ a bit from those of `pennylane-claude`.
+critic's gradient uses an approximation of the derivative of its matrix exponentials. As a result, its training
+trajectories differ a bit from those of `pennylane-claude`.
 
 > [!IMPORTANT]
 > **Looking for the fastest implementation? Use the
@@ -42,7 +43,7 @@ pip install jupyter              # only for the notebook
 
 1. **Configure.** Every setting is a field of the `Config` class in [`src/config.py`](src/config.py), documented
    there: the target Hamiltonian, the generator ansatz and number of layers, the ancilla topology, the optimiser, the
-   number of epochs, and which experiment to run:
+   number of epochs, the entanglement diagnostics (`compute_entanglement`, on by default), and which experiment to run:
    - a single training (`run_multiple_experiments = False`);
    - several settings trained from scratch, `N_reps_if_from_scratch` times each (`common_initial_plateaus = False`,
      one setting per entry of `reps_new_config`);
@@ -51,6 +52,9 @@ pip install jupyter              # only for the notebook
      The base configuration has `extra_ancilla = False`, so the plateaus are trained without the ancilla and each
      setting inserts it. A run with an ancilla cannot be continued in another ancilla topology.
 
+   The paper's configurations (a1)–(a4) are `ancilla_topology = "ansatz"`, `"bridge"` with `ancilla_connect_to = 1`,
+   `"bridge"`, and `"total"` (see the tutorial, §1).
+
 2. **Run**, from the repository root (results are written relative to the current folder):
 
    ```bash
@@ -58,12 +62,28 @@ pip install jupyter              # only for the notebook
    ```
 
    Each run is saved to `generated_data/<timestamp>/`: its log (`logs/log.txt`, which starts with the full
-   configuration), the fidelity and cost records (`fidelities/`), the trained models (`saved_model/`, from which
-   `load_timestamp` continues a run), the final angles, and plots. A multiple run adds summary plots comparing its
-   settings. Errors during a multiple run are written to its log.
+   configuration), the fidelity and cost records (`fidelities/log_fidelity_loss.txt`, one column: the fidelities, then
+   the costs), the trained models (`saved_model/`, from which `load_timestamp` continues a run), the final angles, and
+   plots. A multiple run adds summary plots comparing its settings. Errors during a multiple run are written to its
+   log.
 
 3. **Replot** a saved multiple run with your own labels: set `time_stamp_to_replot`, `run_names` and `x_label` in
    [`src/replot.py`](src/replot.py), then run `python src/replot.py`.
+
+The code can also be driven from your own Python script or notebook: import `CFG` from `config`, set its fields
+directly, and call `run_single_training()` or `run_multiple_trainings()`
+from `tools.training_init`, with `src/` on the path, as the notebook does with its `configure()`.
+
+## Repository layout
+
+| path | contents |
+|---|---|
+| `src/config.py` | every setting, documented (the only file to edit for experiments) |
+| `src/main.py` | entry point |
+| `src/qgan/` | generator (NumPy circuit), critic, targets, ancilla and entanglement diagnostics, cost, training loop |
+| `src/tools/` | experiment protocols (`training_init.py`), loading and saving (`data/`), circuits and gates (`qobjects/`), optimiser, plots |
+| `src/replot.py` | plots of a saved run with custom labels |
+| `tutorial.ipynb` | the guided tutorial: how to obtain results like the paper's main ones (saved outputs from `pennylane-claude`) |
 
 ## Citation
 
